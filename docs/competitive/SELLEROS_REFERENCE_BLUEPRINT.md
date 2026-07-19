@@ -50,6 +50,10 @@ The reviewed platforms repeatedly use several effective patterns:
 | Alerts and exception queues      | Prioritize products needing attention rather than expecting users to inspect every row |
 | Guided setup                     | First-use checklist for marketplace, import, costs and inventory completeness          |
 | Progressive disclosure           | Recommendation first; calculation, raw evidence and audit history on demand            |
+| Profit/cash separation           | Unit/period economics and timed liquidity projections remain separate bounded contexts |
+| Effective-dated cost evidence    | Cost method, marketplace, batch/period, source and recalculation history stay explicit |
+| Test-before-automation           | Recommendations require approval before any later external command is enabled          |
+| Data-quality warnings            | Missing/invalid financial inputs block or qualify conclusions instead of becoming zero |
 
 SellerOS should implement these interaction principles in its own visual language and with
 transparent formulas.
@@ -123,6 +127,10 @@ Import history needs status, marketplace, source, alias-registry version, checks
 timestamps, counts and a link to mapping decisions. Re-uploading the same checksum should explain
 the idempotent result rather than showing a generic error.
 
+The same mapping contract should be reusable for later seller-entered bulk data. Public competitor
+reports demonstrate that fee and cost columns can change across periods; files must be mapped by
+header and version, never concatenated or bound by position without validation.
+
 ### 3.4 Product portfolio
 
 Purpose: move from a large evidence set to a manageable shortlist and action.
@@ -191,6 +199,9 @@ the MVP.
 
 Economics needs reusable, effective-dated cost profiles and a traceable calculation sheet. The UI
 should support organisation defaults with explicit product overrides, never invisible inheritance.
+It must show the valuation convention, effective period, marketplace and source. A later FIFO or
+weighted-average inventory-cost implementation must preserve receipt-layer lineage and make any
+historical recalculation visible; it must not silently rewrite an already explained result.
 
 Sourcing needs:
 
@@ -206,6 +217,10 @@ Sourcing needs:
 Inventory views should use action states such as In Stock, Reorder Soon, Order Now, Overstock,
 Ageing and Data Missing. Unlike opaque labels, every state must link to the exact inputs and rule
 version.
+
+The useful workflow hand-off is inventory evidence → reorder scenario → user-confirmed purchase
+decision → purchase order/inbound shipment → received quantity and cost layer. That full chain is
+future-facing; Phase 3 remains advisory and must not place orders automatically.
 
 Lifecycle and pricing should show:
 
@@ -229,6 +244,10 @@ Planning should offer conservative, expected and aggressive 3-, 6- and 12-month 
 - lowest cash point and maximum working-capital need;
 - cash tied in inventory and normal-versus-clearance recovery;
 - assumption versions and scenario comparison.
+
+Profit, inventory valuation and cash movement are related projections, not interchangeable
+metrics. A cash entry must not change product profitability unless it also creates a separately
+authorized, effective-dated cost or expense record.
 
 ## 4. Frontend engineering boundaries
 
@@ -270,31 +289,31 @@ Rules:
 The competitors' public workflows imply many internal capabilities, but not their implementation.
 SellerOS should keep these capabilities in one deployable backend with explicit module boundaries.
 
-| Module                  | Responsibility                                                          | Important boundaries                                                                |
-| ----------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Identity and tenancy    | Organisations, users, roles, marketplaces and settings                  | No public SaaS launch before organisation isolation is enforced at query boundaries |
-| Imports                 | Upload validation, checksums, workbook detection, row errors and status | Uploaded content never executes; transactional completion or explicit failure       |
-| Mapping                 | Header normalization, aliases, ambiguity handling and mapping versions  | Never bind canonical fields to fixed positions or silently guess collisions         |
-| Catalogue               | Organisation/marketplace/ASIN identity and product metadata             | ASIN alone is not globally unique in SellerOS                                       |
-| Market evidence         | Immutable snapshots, raw attributes and observation provenance          | Corrections append evidence; they do not overwrite history                          |
-| Scoring                 | Deterministic component scores and confidence                           | Formula versions, inputs and reason codes are stored                                |
-| Recommendations         | Strategy/lifecycle/action rules                                         | Advisory, versioned, evidence-backed and separate from user decisions               |
-| Costs and profitability | Effective-dated costs, fees and unit economics                          | Decimal arithmetic, explicit currency, rounding rules and source dates              |
-| Sourcing                | Suppliers, quotations, tiers, MOQ and lead time                         | Seller-owned private data; no row-level logging                                     |
-| Inventory               | Positions, movements, cover, reorder and ageing                         | Imported market data can never overwrite inventory                                  |
-| Pricing                 | Minimum, target and lifecycle pricing scenarios                         | No autonomous repricing in the MVP                                                  |
-| Forecasting             | Scenario assumptions, monthly cash flows and working capital            | Unsold inventory is not realized cash                                               |
-| Decisions               | Accept/reject/defer/override recommendations                            | User action is append-only and auditable                                            |
-| Audit                   | Actor, event, entity, before/after references and correlation           | Sensitive payload policy and retention controls                                     |
-| Integrations            | Keepa Excel/API, SP-API and future ads adapters                         | External contracts isolated behind interfaces and rate-limit handling               |
-| Reporting               | Bounded exports and KPI projections                                     | Definitions/version metadata travel with exports                                    |
-| Notifications           | Rules, preferences, suppression and delivery                            | Created only after stable underlying action states exist                            |
-| Entitlements            | Plan limits, usage counters and feature access                          | Entitlements cannot alter deterministic financial results                           |
+| Module                  | Responsibility                                                          | Important boundaries                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Identity and tenancy    | Organisations, users, roles, marketplaces and settings                  | No public SaaS launch before organisation isolation is enforced at query boundaries  |
+| Imports                 | Upload validation, checksums, workbook detection, row errors and status | Uploaded content never executes; transactional completion or explicit failure        |
+| Mapping                 | Header normalization, aliases, ambiguity handling and mapping versions  | Never bind canonical fields to fixed positions or silently guess collisions          |
+| Catalogue               | Organisation/marketplace/ASIN identity and product metadata             | ASIN alone is not globally unique in SellerOS                                        |
+| Market evidence         | Immutable snapshots, raw attributes and observation provenance          | Corrections append evidence; they do not overwrite history                           |
+| Scoring                 | Deterministic component scores and confidence                           | Formula versions, inputs and reason codes are stored                                 |
+| Recommendations         | Strategy/lifecycle/action rules                                         | Advisory, versioned, evidence-backed and separate from user decisions                |
+| Costs and profitability | Effective-dated costs, fees, inventory valuation and unit economics     | Decimal arithmetic, explicit currency, cost method, rounding and recalculation audit |
+| Sourcing                | Suppliers, quotations, tiers, MOQ and lead time                         | Seller-owned private data; no row-level logging                                      |
+| Inventory               | Positions, movements, cover, reorder and ageing                         | Imported market data can never overwrite inventory                                   |
+| Pricing                 | Minimum, target and lifecycle pricing scenarios                         | No autonomous repricing in the MVP                                                   |
+| Forecasting             | Scenario assumptions, monthly cash flows and working capital            | Separate from profit; unsold inventory is not realized cash                          |
+| Decisions               | Accept/reject/defer/override recommendations                            | User action is append-only and auditable                                             |
+| Audit                   | Actor, event, entity, before/after references and correlation           | Sensitive payload policy and retention controls                                      |
+| Integrations            | Keepa Excel/API, SP-API and future ads adapters                         | External contracts isolated behind interfaces and rate-limit handling                |
+| Reporting               | Bounded exports and KPI projections                                     | Definitions/version metadata travel with exports                                     |
+| Notifications           | Rules, preferences, suppression and delivery                            | Created only after stable underlying action states exist                             |
+| Entitlements            | Plan limits, usage counters and feature access                          | Entitlements cannot alter deterministic financial results                            |
 
 ## 6. Recommended backend package direction
 
-The current Phase 0 directories are valid. As workflows grow, organize internally by business
-capability rather than by competitor tool name:
+The Phase 1 implementation already groups workflow code by business capability. Extend that
+structure as accepted stories add workflows; never organize modules by competitor tool name:
 
 ```text
 backend/app/
@@ -302,10 +321,11 @@ backend/app/
   core/
   modules/
     imports/
-    catalogue/
-    intelligence/
+    portfolio/
     scoring/
-    recommendations/
+    strategies/
+    workspaces/
+    # Add only when accepted stories require them:
     economics/
     sourcing/
     inventory/
@@ -321,38 +341,41 @@ Each business module may contain schemas, services and repository interfaces. SQ
 adapter implementations remain infrastructure concerns. Route handlers validate, authorize and
 delegate; they do not implement business rules.
 
-This is a suggested evolution, not a Phase 1 restructuring requirement.
+This is the active package direction established in Phase 1. Future modules remain story-driven;
+do not create speculative empty packages.
 
 ## 7. Phase 1 API reference
 
-Exact request/response schemas should be defined during implementation, but these resource
-boundaries support the required workflows:
+The implemented request/response contracts are documented in
+[Phase 1 API and Decision Contracts](../PHASE1_CONTRACTS.md) and OpenAPI. The current resource
+boundaries are:
 
 ```text
+GET    /api/v1/health
+
+GET    /api/v1/workspaces
+POST   /api/v1/workspaces
+
 POST   /api/v1/imports
 GET    /api/v1/imports
 GET    /api/v1/imports/{import_id}
-POST   /api/v1/imports/{import_id}/mapping-preview
 PUT    /api/v1/imports/{import_id}/mapping
 POST   /api/v1/imports/{import_id}/confirm
-GET    /api/v1/imports/{import_id}/errors
 
+GET    /api/v1/dashboard
 GET    /api/v1/products
 GET    /api/v1/products/{product_id}
-GET    /api/v1/products/{product_id}/snapshots
-GET    /api/v1/products/{product_id}/scores
-GET    /api/v1/products/{product_id}/recommendations
-
-GET    /api/v1/dashboard/summary
-GET    /api/v1/dashboard/opportunities
-GET    /api/v1/dashboard/risks
 ```
+
+Import detail responses carry mapping preview, status, summary and bounded error information.
+Product detail carries latest evidence plus snapshot, score and recommendation history; separate
+candidate sub-routes are not part of the Phase 1 contract.
 
 Design requirements:
 
 - organisation and marketplace scope derived from an authorized context when authentication is
   implemented, never trusted solely from arbitrary client IDs;
-- idempotency by organisation plus checksum for imports;
+- idempotency by organisation, marketplace and SHA-256 checksum for imports;
 - cursor or bounded offset pagination with deterministic secondary sorting;
 - stable filter validation and machine-readable error codes;
 - response metadata for evidence time, formula/rule version, currency and data confidence;
@@ -361,8 +384,8 @@ Design requirements:
 
 ## 8. Data model additions to evaluate by phase
 
-The Phase 0 model already contains the required canonical entities. Additions should be driven by
-accepted stories, not by this research alone.
+The canonical foundation and Phase 1 evidence extensions contain the currently required persisted
+entities. Further additions should be driven by accepted stories, not by this research alone.
 
 | Candidate                            | Why it may be needed                                    | Earliest phase   |
 | ------------------------------------ | ------------------------------------------------------- | ---------------- |
@@ -372,8 +395,10 @@ accepted stories, not by this research alone.
 | SavedProductView / Shortlist         | Reusable portfolio workflows                            | Phase 1 or later |
 | DecisionRecord                       | Accept, reject, defer and override recommendations      | Phase 1 or 3     |
 | CostComponent / FeeAssumption        | Detailed, source-dated unit economics                   | Phase 2          |
+| InventoryCostLayer / ValuationMethod | Receipt/batch lineage for FIFO or weighted-average COGS | Phase 2 or 3     |
 | SupplierOfferTier                    | Quantity-sensitive supplier pricing                     | Phase 2          |
 | InventoryMovement                    | Auditable manual/API inventory changes                  | Phase 3          |
+| PurchaseOrder / PurchaseOrderLine    | Link approved replenishment to inbound cost and stock   | Phase 3 or later |
 | LifecycleTransition                  | Recommended and user-confirmed stage history            | Phase 3          |
 | ForecastPeriod                       | Persisted monthly scenario outputs                      | Phase 4          |
 | IntegrationConnection / SyncRun      | External authorization and synchronization history      | Phase 5          |
@@ -412,6 +437,8 @@ Every important value should carry or inherit:
 - Never add amounts in different currencies without an explicit dated conversion rate.
 - Store amount and ISO currency code together at contracts and persistence boundaries.
 - Distinguish sales proceeds, tax, fees, refunds, ad costs, COGS and inventory value.
+- Store the cost/valuation method and effective date with any result affected by inventory layers.
+- Treat a historical recalculation as a new version with cause and actor, never an invisible edit.
 
 ## 10. Integration strategy
 
@@ -436,7 +463,8 @@ restricted data, rate limits, retries and notification idempotency need dedicate
 
 Advertising data uses separate authorization and contracts. Do not assume an SP-API connection
 also grants advertising access. Advertising management is not needed to prove SellerOS's operating
-decision loop.
+decision loop. If a later write workflow is approved, use explicit Off/Test/On modes: Test records
+the proposed command for review, and On requires guardrails plus an immutable before/after audit.
 
 ## 11. Explainability and audit
 
@@ -452,6 +480,8 @@ decision trust by guaranteeing:
 - append-only recommendation history;
 - user decision and override reason;
 - later outcome linkage for recommendation evaluation.
+- for any future external automation: proposed command, approval/mode, actor, before/after values,
+  provider result and correlation identifier.
 
 AI can summarize these facts in a future phase, but it cannot generate financial truth, silently
 replace assumptions or execute a purchase/price action.

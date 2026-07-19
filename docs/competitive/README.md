@@ -1,8 +1,8 @@
 # SellerOS competitive reference
 
 This documentation captures public, seller-facing capabilities from Helium 10, Amazon Seller
-Central and Jungle Scout and translates the strongest product patterns into a reference blueprint
-for SellerOS.
+Central, Jungle Scout and sellerboard and translates the strongest product patterns into a
+reference blueprint for SellerOS.
 
 Research date: **2026-07-19**
 
@@ -45,11 +45,13 @@ The documents use these labels:
 
 Amazon Seller Central is the operational system of record for listings, inventory, fulfillment,
 orders, payments and account status. Helium 10 and Jungle Scout add research, optimization,
-monitoring and analytics around Amazon data. SellerOS should occupy a narrower decision layer:
+monitoring and analytics around Amazon data. sellerboard adds a concentrated profitability,
+inventory, cash-flow and operational-control layer. SellerOS should occupy a narrower decision
+layer:
 
 > Combine imported market evidence with seller-owned costs, suppliers, inventory and cash
 > constraints to recommend what to test, grow, reorder, mark down, clear or avoid—and explain the
 > effect on contribution profit and cash conversion.
 
-This positioning avoids trying to clone three mature suites and directly supports the SellerOS
+This positioning avoids trying to clone four mature products and directly supports the SellerOS
 product vision.

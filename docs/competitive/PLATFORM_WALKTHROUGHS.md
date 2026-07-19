@@ -1,6 +1,6 @@
-# Helium 10, Amazon Seller Central and Jungle Scout walkthroughs
+# Helium 10, Amazon Seller Central, Jungle Scout and sellerboard walkthroughs
 
-This document describes the current public product surfaces and seller workflows of three reference
+This document describes the current public product surfaces and seller workflows of four reference
 platforms. It focuses on behavior useful to SellerOS product and engineering decisions. It does not
 claim access to their private implementation.
 
@@ -652,7 +652,293 @@ live checkout/contract when commercial decisions depend on them.
 Sources: [membership plans](https://support.junglescout.com/hc/en-us/articles/26264588139799-Information-about-our-Membership-Plans),
 [pricing](https://www.junglescout.com/pricing/).
 
-## 4. Cross-platform conclusions
+## 4. sellerboard
+
+### 4.1 Product role and surfaces
+
+sellerboard positions itself as a management-accounting and operations platform for marketplace
+sellers. Unlike the research-first suites, its centre of gravity is connected-account performance:
+profitability, COGS, inventory, cash flow, PPC, alerts, review requests and FBA recovery workflows.
+Its public material currently covers Amazon broadly and selected Walmart/eBay reporting, with
+feature availability varying by marketplace and plan.
+
+The main documented surfaces are:
+
+- Profit Dashboard, product settings, indirect expenses, LTV, cash flow and reports;
+- Inventory Planner, purchase orders, prep-centre stock and FBA shipments;
+- PPC Dashboard and optional Smart Portfolio automation;
+- Autoresponder campaigns and order-level review-request controls;
+- Money Back analysis for lost/damaged inventory, returns and reimbursement gaps;
+- configurable alerts for profitability, advertising, inventory, listings and account events.
+
+Sources: [product overview](https://sellerboard.com/en),
+[Help Center feature index](https://help.sellerboard.com/category/tools-features/),
+[Walmart overview](https://sellerboard.com/en/walmart), [FAQ](https://sellerboard.com/en/faq).
+
+### 4.2 Typical seller journey
+
+1. Connect one or more marketplace accounts and advertising access.
+2. Review the Profit Dashboard by period, marketplace, product or tag.
+3. Complete product-level COGS, handling, shipping and return-cost settings; resolve missing-data
+   warnings.
+4. Add indirect expenses and inspect product/company P&L and return economics.
+5. Configure lead times, stock targets and prep-centre quantities in Inventory Planner.
+6. Convert replenishment recommendations into a purchase order or shipment plan.
+7. Track liquidity separately in Cashflow, including future purchases and payouts.
+8. Inspect PPC performance against product economics and optionally automate eligible portfolios.
+9. Work alert, autoresponder and Money Back exception queues.
+10. Export scheduled or ad-hoc operational and financial reports.
+
+This journey is important for SellerOS because it joins financial analysis to operational action
+without pretending profit and cash balance are the same measure.
+
+### 4.3 Profit Dashboard
+
+The Profit Dashboard combines connected marketplace data with seller-maintained costs. Publicly
+documented inputs include sales, Amazon fees, advertising, shipping, refunds, return costs, COGS
+and indirect expenses. Users can filter by ASIN, SKU, product name or tag and inspect Tiles, Chart,
+Table, P&L, Map and Trends views across flexible date periods.
+
+Inputs:
+
+- connected marketplace orders, transactions, fees, inventory and advertising data;
+- date/marketplace/product/tag filters;
+- product costs and indirect-expense allocations;
+- selected KPIs, comparison periods and table configuration.
+
+Outputs:
+
+- sales, units, refunds, gross profit, net profit, margin, ROI and estimated payout;
+- product and period breakdowns with expandable cost/fee categories;
+- graphical trends and geography views;
+- drill-through from a portfolio result to product-level evidence;
+- exportable reports with related profitability measures.
+
+Documented “smart URLs” can retain dashboard filters for bookmarks and repeatable views. This is a
+strong reference for SellerOS saved views and sharable portfolio URLs.
+
+This is management reporting rather than audited statutory accounting. Advertising figures require
+the separate Amazon Advertising connection, and some calculated PPC-order costs are documented as
+estimates.
+
+Sources: [Profit Dashboard](https://help.sellerboard.com/2025/11/26/tiles-view/),
+[reports](https://help.sellerboard.com/2025/12/04/2-1-8-reports/),
+[smart URLs](https://blog.sellerboard.com/2025/05/30/save-time-with-bookmarked-filters-how-to-use-sellerboards-smart-urls/).
+
+### 4.4 Product costs, expenses and return economics
+
+The Products workspace holds seller-owned calculation inputs rather than market-research evidence.
+Current COGS methods are FIFO, weighted average and by period. Costs can vary by marketplace and
+batch; batch records include receipt date, unit count, cost and active/depleted state. Spreadsheet,
+CSV and Google Sheet imports support product-, batch- and order-level updates, source-to-target
+column mapping, background processing and detailed errors. Blank imported fields do not overwrite
+existing values. Updating cost history can recalculate historical order economics.
+
+The same workspace supports tags, FBM shipping/handling and return-value assumptions. Indirect
+expenses can be one-time or recurring, categorized and allocated across products or marketplaces.
+Return analysis separates refunded revenue, Amazon/customer reimbursements, returned inventory
+value and operational return costs so the seller can inspect the actual loss mechanism.
+
+SellerOS lessons:
+
+- cost is effective-dated evidence, not one mutable number on Product;
+- inventory valuation method is an explicit accounting choice;
+- missing or invalid COGS must produce a warning, never a silent zero;
+- changing historical cost assumptions requires a visible recalculation/audit event;
+- imported market snapshots remain structurally separate from private seller costs.
+
+Sources: [products and COGS](https://help.sellerboard.com/2025/12/04/2-1-2-products/),
+[bulk COGS import](https://blog.sellerboard.com/2024/05/10/new-features-for-streamlining-cogs-management-quick-entry-new-bulk-upload/),
+[indirect expenses](https://help.sellerboard.com/2025/12/04/2-1-4-indirect-expenses/),
+[profit-accuracy updates](https://blog.sellerboard.com/2026/03/13/new-in-sellerboard-visual-pl-insights-custom-dashboards-stronger-profit-accuracy/).
+
+### 4.5 Inventory, purchase orders and shipments
+
+Inventory Planner combines FBA, FBM, prep-centre, ordered and sent-to-FBA quantities with weighted
+sales velocity, supplier manufacturing time, transit/receiving lead time, FBA buffer and target
+stock. It produces days of stock, a recommended reorder date/quantity and red/yellow urgency. The
+public workflow can carry selected products directly into a shipment plan or purchase order.
+
+Purchase orders record supplier, dates, quantities, unit cost and status. They can be exported in
+supplier currency with logistics/landed-cost detail, split for partial deliveries and closed into
+prep-centre stock. FBA shipments link operational receipt to cost batches; current documentation
+describes FIFO updates for multi-product shipment batches.
+
+That gives a reusable workflow boundary:
+
+```text
+inventory evidence -> forecast/reorder recommendation -> approved PO -> inbound shipment
+                   -> received quantity and cost batch -> refreshed profitability
+```
+
+SellerOS should emulate the hand-off and traceability, but retain conservative/expected/aggressive
+scenarios and explicit cash constraints before turning a recommendation into a user decision.
+
+Sources: [Inventory Planner](https://help.sellerboard.com/2025/12/04/3-1-1-analyzing-and-automating-ppc/),
+[purchase orders](https://help.sellerboard.com/2026/02/02/2-3-2-purchase-orders/),
+[FBA shipments](https://help.sellerboard.com/2026/02/02/2-3-4-fba-shipments/).
+
+### 4.6 Cash flow
+
+Cashflow is explicitly separate from profit. It tracks the timing of Amazon payouts, purchases,
+operating expenses, investments and dividends, then shows net cash movement and closing balance in
+payout or calendar views. Users can add, edit, import and export transactions. The application
+automatically projects the next three periods based on the selected view.
+
+The public documentation also sets clear limits: Cashflow is an internal planning tool, not an
+accounting/tax system; it does not automatically synchronize bank balances and its entries do not
+change Profit Dashboard or LTV results.
+
+SellerOS should preserve this separation while extending planning to versioned 3-, 6- and 12-month
+scenarios with opening cash, settlement lag, purchase commitments, tax assumptions and a clearly
+identified lowest-cash point.
+
+Source: [Cashflow](https://help.sellerboard.com/2025/12/04/2-1-7-cashflow/).
+
+### 4.7 PPC analytics and automation
+
+The PPC Dashboard combines Amazon Ads activity with product economics including COGS, fees,
+refunds and indirect expenses. It supports Smart Portfolio, portfolio, campaign, ad-group, keyword
+and search-term levels, with spend, sales, clicks, conversions, ACoS, profit and margin. Public
+documentation also describes break-even ACoS, break-even bid, bid recommendations, bulk edits,
+exports and Smart Portfolio automation for bids, budgets and keyword discovery. Automation can be
+Off, Test (recommendations require approval) or On; the Automation Log records before/after values,
+reason, mode/actor and processing status.
+
+The transferable pattern is economic guardrails around optimization: an advertising recommendation
+should know whether a conversion is contribution-positive. SellerOS does not need campaign
+management in early phases, but its cost model should keep advertising actuals and assumptions as
+separate, source-dated components.
+
+Sources: [PPC Dashboard](https://help.sellerboard.com/2025/12/04/2-2-1-ppc-dashboard/),
+[bid automation](https://help.sellerboard.com/2026/02/02/2-2-4-ppc-bid-automation/),
+[keyword automation](https://help.sellerboard.com/2026/02/02/2-2-5-keyword-automation/),
+[automation log](https://help.sellerboard.com/2026/02/02/2-2-3-ppc-automation-log/).
+
+### 4.8 Alerts, review requests and Money Back
+
+The Alerts Dashboard is an exception queue driven by connected data. Current categories include
+Buy Box/listing changes, blocks or suspensions, low stock, fee changes, sales/refund/PPC anomalies,
+payout delays and FBA shipment issues. Rules can be scoped by marketplace or product tag and sent
+in-app or by email. Selecting an alert opens the relevant product, inventory, profit or shipment
+context; resolving it marks the sellerboard task handled but does not mutate Amazon.
+
+Autoresponder uses campaign targeting, timing, template and priority rules to send Amazon's Request
+a Review message or custom communications where permitted. Test/inactive/active states, order
+blacklists and marketplace localization are documented. This is policy-sensitive and remains out
+of the SellerOS MVP.
+
+Money Back identifies potential FBA recovery cases by comparing losses/damage, refunds, returns and
+reimbursements. The reviewed workflows produce estimates and exportable evidence but require human
+review and manual Seller Support submission; reimbursement is not guaranteed.
+
+Sources: [alerts dashboard](https://help.sellerboard.com/2025/12/04/2-6-1-alerts-dashboard/),
+[alert settings](https://help.sellerboard.com/2026/02/02/2-6-2-alerts-settings-redo/),
+[Autoresponder](https://help.sellerboard.com/2025/12/04/2-4-1-autoresponder/),
+[lost and damaged inventory](https://help.sellerboard.com/2025/12/04/2-5-lost-damaged-inventory/),
+[unreturned refunds](https://help.sellerboard.com/2026/02/02/2-5-2-returns/),
+[reimbursement gap](https://help.sellerboard.com/2026/02/02/2-5-4-reimbursement-gap/).
+
+### 4.9 Search-term and customer-value analysis
+
+For eligible Brand Registry accounts, Search Terms joins Brand Analytics funnel evidence—impression,
+click, add-to-cart and order measures—with estimated sales/profit and advertising spend. It offers
+detail/trend views, product/brand/search-term grouping, configurable columns, sparklines and a
+heatmap. Access and history are constrained by Amazon Brand Analytics eligibility.
+
+LTV reports accumulated sales, units and orders for repeat purchasers over selectable windows. The
+documentation explicitly says LTV is behavioural/revenue analysis rather than profit, another good
+example of keeping metric definitions bounded.
+
+Sources: [Search Terms](https://help.sellerboard.com/2025/12/04/2-1-5-search-terms/),
+[LTV](https://help.sellerboard.com/2025/12/04/2-1-6-ltv/).
+
+### 4.10 Reports, integrations and platform scope
+
+The report hub exports daily, monthly, product, order, PPC, inventory-snapshot and COGS datasets to
+spreadsheet formats. Large exports can be prepared asynchronously and delivered by email. Public
+settings also document a Seller Central profit widget and emailed daily sales reports. Report
+documentation warns that detailed fee/COGS columns can change between periods, so independently
+generated files may not concatenate safely. That is direct support for SellerOS's dynamic-header,
+alias-version and unknown-field requirements.
+
+Verified integration dependencies include Amazon seller-account data, a separate Advertising API
+connection and Brand Analytics for the gated Search Terms workflow. Spreadsheet and Google Sheet
+imports are available for selected business data. An older official announcement describes
+protected report feeds under an API setting, but no equally detailed current public API reference
+was found; treat this as report automation to verify in-product, not a broad CRUD API contract.
+
+Sources: [reports](https://help.sellerboard.com/2025/12/04/2-1-8-reports/),
+[general settings](https://help.sellerboard.com/2025/11/26/general-settings/),
+[report-feed announcement](https://blog.sellerboard.com/2020/03/24/some-new-features-which-we-released-recently/),
+[product overview](https://sellerboard.com/en).
+
+### 4.11 Teams, agencies and mobile workflows
+
+Plan-dependent users can be restricted by feature, marketplace/account and product, with editing
+rights controlling changes such as COGS, expenses and PPC. Agency material documents client-account
+switching, central billing, client/team separation, branding and scheduled reports. Native mobile
+workflows cover dashboards, product costs, expenses, inventory/reordering and alerts; a newer
+reseller flow adds barcode/product search, a buy-list and desktop hand-off for labels and shipment
+work.
+
+These are later-stage SaaS references, not Phase 1 scope. The transferable architecture is
+multi-dimensional authorization—tenant plus marketplace plus capability plus resource scope—not a
+single administrator flag.
+
+Sources: [team management](https://blog.sellerboard.com/2024/07/09/efficient-team-management-in-your-amazon-business-unlock-the-power-of-sellerboards-users-page/),
+[agency accounts](https://sellerboard.com/agencies),
+[mobile workflows](https://blog.sellerboard.com/2024/05/16/more-sellerboard-features-available-on-the-mobile-app/),
+[reseller workflow](https://sellerboard.com/en/reseller-workflow).
+
+### 4.12 UI patterns
+
+- metric tiles, chart, dense table and P&L as alternate projections of the same filter context;
+- persistent product/date/marketplace/tag filtering;
+- expandable cost rows from headline profit to individual fee evidence;
+- configurable KPIs and table columns;
+- explicit missing-cost and estimated-value warnings;
+- red/yellow inventory urgency tied to a next action;
+- cross-module links from alert to affected product or workflow;
+- import/export templates for high-volume seller-maintained data;
+- statuses and split/partial flows for purchase orders and shipments;
+- separate Analyze, Recommend, Test/Approve, Automate and Audit surfaces for risky automation;
+- background imports/exports with visible status, detailed errors and completion notification.
+
+### 4.13 Architectural inference
+
+The following are plausible enabling capabilities, not claims about sellerboard's private
+implementation:
+
+- marketplace connectors with incremental sync, reconciliation and freshness metadata;
+- normalized order/transaction/fee/advertising/inventory facts plus raw-source provenance;
+- effective-dated product-cost and inventory-cost-layer services;
+- profitability projections separated from a liquidity/cashflow ledger;
+- allocation service for recurring and product/marketplace expenses;
+- inventory forecasting and replenishment rules with configurable lead-time inputs;
+- purchase-order and inbound-shipment state machines;
+- PPC reporting cube and rule executor with economic guardrails;
+- event/threshold detection feeding alert and notification workflows;
+- background report generation with bounded exports;
+- tenant, marketplace, plan and team entitlement controls.
+
+### 4.14 Availability and accuracy caveats
+
+Marketplace coverage, historical depth, feature access and user limits vary by plan and connection.
+Pricing and tier limits are volatile and should not become SellerOS constants. Marketing pages can
+lag the Help Center: for example, a marketing description still references constant COGS while the
+newer product documentation says that legacy method is no longer available. The newer workflow
+documentation takes precedence in this reference. Alerts are marketed as “real-time,” while the
+current settings article says rules are evaluated daily and that there is no long-term alert log;
+the explicit operational statement takes precedence until verified in-product.
+
+Forecasts, reimbursement amounts, payouts and some PPC-order costs are estimates. SellerOS should
+retain the same honesty while also storing formula versions, assumptions and provenance.
+
+Sources: [pricing/product overview](https://sellerboard.com/en),
+[current COGS methods](https://help.sellerboard.com/2025/12/04/2-1-2-products/).
+
+## 5. Cross-platform conclusions
 
 ### Shared strengths
 
@@ -663,7 +949,9 @@ Sources: [membership plans](https://support.junglescout.com/hc/en-us/articles/26
 - workflow links that retain selected identifiers;
 - progressive activation after connecting Amazon;
 - action/exception queues and status histories;
-- exports and plan-aware usage limits.
+- exports and plan-aware usage limits;
+- drill-down from financial summary to cost/fee/order evidence;
+- explicit workflow states before high-impact automation.
 
 ### Gaps SellerOS can own
 
@@ -674,7 +962,8 @@ Sources: [membership plans](https://support.junglescout.com/hc/en-us/articles/26
 - markdown/clearance advice constrained by minimum acceptable economics;
 - test-buy and reorder scenarios constrained by working capital;
 - integrated quarterly, half-yearly and annual cash planning;
-- full trace from source evidence through formula/recommendation to user decision and outcome.
+- full trace from source evidence through formula/recommendation to user decision and outcome;
+- a Keepa-first pre-buy decision layer connected to post-purchase economics and lifecycle outcomes.
 
 ### Product warning
 

@@ -67,6 +67,10 @@ upload a Keepa `.xlsx`, review the detected mapping, then confirm it. Open Plann
 enter costs, compare supplier quotations and request advisory test-buy scenarios. Local uploads,
 databases and workbooks are ignored by Git. Never commit seller workbooks or imported business data.
 
+The frontend uses same-origin `/api` requests. During local development, Vite proxies those requests
+to `http://127.0.0.1:8000`; this also avoids private-port CORS redirects in GitHub Codespaces. Set
+`VITE_API_BASE_URL` only when the frontend and API are intentionally hosted on separate origins.
+
 Health and interactive API documentation:
 
 - `http://localhost:8000/api/v1/health`

@@ -51,7 +51,8 @@ describe('API client', () => {
       body: { answer: 42 },
     });
 
-    const [, options] = fetchMock.mock.calls[0] ?? [];
+    const [url, options] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe('/api/v1/example');
     expect(options?.body).toBe('{"answer":42}');
     expect(new Headers(options?.headers).get('content-type')).toBe('application/json');
     expect(new Headers(options?.headers).get('x-client')).toBe('selleros');

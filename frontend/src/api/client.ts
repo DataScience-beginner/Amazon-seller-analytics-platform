@@ -32,10 +32,7 @@ import {
 } from './normalizers';
 import type { HealthResponse } from '../types/health';
 
-const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(
-  /\/$/,
-  '',
-);
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 const API_ROOT = `${API_ORIGIN}/api/v1`;
 
 type ErrorBody = {

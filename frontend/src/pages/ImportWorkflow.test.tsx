@@ -95,7 +95,7 @@ describe('Keepa import workflow', () => {
   it('uploads, saves a reviewed mapping, confirms, and displays the transactional summary', async () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, options?: RequestInit) => Promise<Response>>(
       async (input, options) => {
-        const url = new URL(String(input));
+        const url = new URL(String(input), window.location.origin);
         const method = options?.method ?? 'GET';
         if (url.pathname.endsWith('/health')) {
           return json({ status: 'ok', application: 'SellerOS', database: 'ok' });

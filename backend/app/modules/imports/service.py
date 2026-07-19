@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import sqlite3
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
@@ -67,6 +68,8 @@ logger = logging.getLogger(__name__)
 
 _ASIN_PATTERN = re.compile(r"^[A-Z0-9]{10}$")
 _QUERY_CHUNK_SIZE = 500
+_SNAPSHOT_FLUSH_CHUNK_SIZE = 100
+_POSTGRES_RETRYABLE_SQLSTATES = frozenset({"40001", "40P01", "55P03"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,6 +318,77 @@ def confirm_import(
     organisation_id: str,
     marketplace_id: str,
 ) -> ImportDetailResponse:
+    try:
+        return _confirm_import_once(
+            session,
+            import_id,
+            settings,
+            organisation_id=organisation_id,
+            marketplace_id=marketplace_id,
+        )
+    except OperationalError as exc:
+        session.rollback()
+        if _is_retryable_operational_error(exc):
+            logger.warning(
+                "Import confirmation deferred by a transient database failure",
+                extra={"import_id": import_id},
+            )
+            raise ApplicationError(
+                "import_confirmation_retryable",
+                "The import database is temporarily unavailable; retry confirmation",
+                status_code=503,
+                details={"import_id": import_id, "retryable": True},
+            ) from exc
+        logger.error(
+            "Import confirmation stopped by a non-retryable database failure",
+            extra={
+                "import_id": import_id,
+                "failure_class": type(exc.orig).__name__,
+                "retryable": False,
+            },
+        )
+        raise ApplicationError(
+            "import_confirmation_database_error",
+            "The import could not be confirmed because of a database failure",
+            status_code=500,
+            details={"import_id": import_id, "retryable": False},
+        ) from exc
+
+
+def _is_retryable_operational_error(exc: OperationalError) -> bool:
+    if exc.connection_invalidated:
+        return True
+
+    original = exc.orig
+    if isinstance(original, sqlite3.OperationalError):
+        sqlite_code = getattr(original, "sqlite_errorcode", None)
+        if isinstance(sqlite_code, int) and (sqlite_code & 0xFF) in {
+            sqlite3.SQLITE_BUSY,
+            sqlite3.SQLITE_LOCKED,
+        }:
+            return True
+        normalized_message = str(original).strip().lower()
+        return normalized_message in {
+            "database is locked",
+            "database is busy",
+            "database table is locked",
+            "database schema is locked",
+        }
+
+    sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    return isinstance(sqlstate, str) and (
+        sqlstate.startswith("08") or sqlstate in _POSTGRES_RETRYABLE_SQLSTATES
+    )
+
+
+def _confirm_import_once(
+    session: Session,
+    import_id: str,
+    settings: Settings,
+    *,
+    organisation_id: str,
+    marketplace_id: str,
+) -> ImportDetailResponse:
     batch = _get_batch(
         session,
         import_id,
@@ -324,8 +398,11 @@ def confirm_import(
     )
     registry = AliasRegistry.default()
     if batch.status is ImportStatus.completed:
+        _cleanup_staged_upload(session, batch, settings, lifecycle="completed")
         return _detail_response(batch, registry=registry)
     if batch.status is not ImportStatus.pending:
+        if batch.status is ImportStatus.failed:
+            _cleanup_staged_upload(session, batch, settings, lifecycle="failed")
         raise ConflictError("import_not_pending", "Only a pending import can be confirmed")
     if batch.alias_registry_version != registry.version:
         raise ConflictError(
@@ -333,10 +410,11 @@ def confirm_import(
             "The import was created with a different alias registry version",
         )
 
-    staged_path = _candidate_batch_path(batch, settings)
     try:
         inspection = _load_inspection(batch, registry, settings)
         path = _batch_path(batch, settings)
+    except OperationalError:
+        raise
     except Exception as exc:
         failure_code, failure_message = _failure_record(exc)
         _record_import_failure(
@@ -345,8 +423,7 @@ def confirm_import(
             failure_code=failure_code,
             failure_message=failure_message,
         )
-        if staged_path is not None:
-            staged_path.unlink(missing_ok=True)
+        _cleanup_staged_upload(session, batch, settings, lifecycle="failed")
         raise _public_import_failure(exc, import_id) from exc
     if inspection.mapping.requires_confirmation:
         raise ConflictError(
@@ -375,7 +452,6 @@ def confirm_import(
         batch.status = ImportStatus.completed
         batch.failure_code = None
         batch.failure_message = None
-        batch.storage_key = None
         session.add(
             _audit_event(
                 organisation_id=batch.organisation_id,
@@ -391,9 +467,14 @@ def confirm_import(
             )
         )
         session.commit()
+    except OperationalError:
+        raise
     except Exception as exc:
         session.rollback()
-        logger.exception("Import processing failed", extra={"import_id": import_id})
+        logger.error(
+            "Import processing failed",
+            extra={"import_id": import_id, "failure_class": type(exc).__name__},
+        )
         failed = _get_batch(
             session,
             import_id,
@@ -409,10 +490,10 @@ def confirm_import(
                 failure_code=failure_code,
                 failure_message=failure_message,
             )
-        path.unlink(missing_ok=True)
+        _cleanup_staged_upload(session, failed, settings, lifecycle="failed")
         raise _public_import_failure(exc, import_id) from exc
 
-    path.unlink(missing_ok=True)
+    _cleanup_staged_upload(session, batch, settings, lifecycle="completed")
     return get_import(
         session,
         import_id,
@@ -420,6 +501,44 @@ def confirm_import(
         organisation_id=organisation_id,
         marketplace_id=marketplace_id,
     )
+
+
+def _cleanup_staged_upload(
+    session: Session,
+    batch: ImportBatch,
+    settings: Settings,
+    *,
+    lifecycle: str,
+) -> None:
+    path = _candidate_batch_path(batch, settings)
+    if path is None:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.error(
+            "Import staged-file cleanup failed",
+            extra={
+                "import_id": batch.id,
+                "failure_class": type(exc).__name__,
+                "lifecycle": lifecycle,
+            },
+        )
+        return
+
+    batch.storage_key = None
+    try:
+        session.commit()
+    except (IntegrityError, OperationalError) as exc:
+        session.rollback()
+        logger.error(
+            "Import cleanup reference could not be cleared",
+            extra={
+                "import_id": batch.id,
+                "failure_class": type(exc).__name__,
+                "lifecycle": lifecycle,
+            },
+        )
 
 
 def _persist_rows(
@@ -527,6 +646,7 @@ def _persist_rows(
         values = item.row.canonical_values
         _update_product_summary(product, values)
         snapshot = ProductSnapshot(
+            id=str(uuid.uuid4()),
             product=product,
             import_batch=batch,
             snapshot_kind=SnapshotKind.keepa,
@@ -594,12 +714,19 @@ def _persist_rows(
             confidence_score=scorecard.data_confidence.value,
             configuration_checksum=strategy_checksum,
         )
-        session.flush()
-        product.latest_snapshot_id = snapshot.id
+        product.latest_snapshot = snapshot
         if product.id in new_product_ids:
             batch.created_rows += 1
         else:
             batch.matched_rows += 1
+
+        chunk_position = batch.created_rows + batch.matched_rows
+        if chunk_position % _SNAPSHOT_FLUSH_CHUNK_SIZE == 0:
+            _flush_snapshot_chunk(session, _SNAPSHOT_FLUSH_CHUNK_SIZE)
+
+    final_chunk_size = len(valid_rows) % _SNAPSHOT_FLUSH_CHUNK_SIZE
+    if final_chunk_size:
+        _flush_snapshot_chunk(session, final_chunk_size)
 
     expected = batch.created_rows + batch.matched_rows + batch.skipped_rows + batch.failed_rows
     if expected != batch.total_rows:
@@ -608,6 +735,12 @@ def _persist_rows(
         "Import rows prepared",
         extra={"import_id": batch.id, "rows": batch.total_rows, "row_errors": row_error_count},
     )
+
+
+def _flush_snapshot_chunk(session: Session, row_count: int) -> None:
+    if row_count < 1 or row_count > _SNAPSHOT_FLUSH_CHUNK_SIZE:
+        raise RuntimeError("Import snapshot flush chunk invariant failed")
+    session.flush()
 
 
 def _add_scores(
@@ -1022,7 +1155,6 @@ def _record_import_failure(
     batch.status = ImportStatus.failed
     batch.failure_code = failure_code
     batch.failure_message = failure_message
-    batch.storage_key = None
     session.add(
         _audit_event(
             organisation_id=batch.organisation_id,

@@ -25,6 +25,17 @@ are missing or any mapping is ambiguous.
 exactly once across `created`, `matched`, `skipped` and `failed`. `row_error_count` includes warnings
 for malformed optional cells as well as blocking row errors.
 
+Snapshot evidence is flushed in bounded write chunks inside one outer transaction. This limits each
+ORM flush burst, not total process memory: confirmation currently materialises all inspected rows and
+retains the atomic unit of work until commit. A known retryable
+database lock, serialization, deadlock or connection failure returns HTTP 503 with code
+`import_confirmation_retryable`; the pending batch, storage key and staged workbook remain available
+for retry. An unclassified operational database failure returns HTTP 500 with code
+`import_confirmation_database_error` and `retryable: false`; it also preserves the pending batch and
+staged evidence for operator diagnosis instead of looping or deleting evidence. File-backed SQLite
+uses WAL and a bounded busy timeout for local reader concurrency. Terminal workbook/content failures
+still roll back domain writes and remove staged content only after the failed state is durable.
+
 Stable import errors use:
 
 ```json

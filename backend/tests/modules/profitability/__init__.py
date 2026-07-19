@@ -1,0 +1,1 @@
+"""Profitability kernel tests."""

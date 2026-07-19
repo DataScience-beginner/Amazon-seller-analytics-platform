@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "formula_version": "selleros.unit-economics.v1",
+  "money_quantum": "0.01",
+  "percentage_quantum": "0.01",
+  "rounding_mode": "ROUND_HALF_UP"
+}

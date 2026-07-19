@@ -72,13 +72,23 @@ def test_cost_profiles_are_structurally_separate_from_snapshots(db_session: Sess
     )
     db_session.add(organisation)
     db_session.flush()
-    product = Product(organisation_id=organisation.id, marketplace=marketplace, asin="B000TEST02")
+    product = Product(
+        id="product-cost-separation",
+        organisation_id=organisation.id,
+        marketplace=marketplace,
+        asin="B000TEST02",
+    )
     snapshot = ProductSnapshot(product=product, market_metrics={"buy_box_price": "19.99"})
     cost = CostProfile(
         organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
         product=product,
+        profile_scope_key=product.id,
+        version=1,
         currency_code="USD",
+        selling_price_tax_basis="tax_exclusive",
         supplier_unit_cost=Decimal("7.50"),
+        configuration_checksum="synthetic-checksum",
     )
     raw = RawAttribute(
         snapshot=snapshot,

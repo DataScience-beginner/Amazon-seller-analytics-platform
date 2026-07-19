@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     CheckConstraint,
+    Date,
     ForeignKey,
     Index,
     Integer,
@@ -63,6 +64,22 @@ class MappingSource(StrEnum):
 class RowErrorSeverity(StrEnum):
     error = "error"
     warning = "warning"
+
+
+class FeeInputStatus(StrEnum):
+    observed = "observed"
+    estimated = "estimated"
+    user_confirmed = "user_confirmed"
+
+
+class SellingPriceTaxBasis(StrEnum):
+    tax_inclusive = "tax_inclusive"
+    tax_exclusive = "tax_exclusive"
+
+
+class TestBuyOutcome(StrEnum):
+    recommended = "recommended"
+    blocked = "blocked"
 
 
 class Organisation(Base):
@@ -263,6 +280,7 @@ class Product(Base):
         foreign_keys=[latest_snapshot_id], post_update=True
     )
     cost_profiles: Mapped[list[CostProfile]] = relationship(back_populates="product")
+    supplier_offers: Mapped[list[SupplierOffer]] = relationship(back_populates="product")
     inventory_positions: Mapped[list[InventoryPosition]] = relationship(back_populates="product")
 
 
@@ -431,23 +449,165 @@ def _prevent_snapshot_evidence_delete(
 
 class CostProfile(Base):
     __tablename__ = "cost_profiles"
+    __table_args__ = (
+        UniqueConstraint(
+            "organisation_id",
+            "marketplace_id",
+            "profile_scope_key",
+            "version",
+            name="uq_cost_profile_scope_version",
+        ),
+        CheckConstraint("version >= 1", name="ck_cost_profile_version_positive"),
+        CheckConstraint(
+            "(product_id IS NULL AND profile_scope_key = 'marketplace_default') OR "
+            "(product_id IS NOT NULL AND profile_scope_key = product_id)",
+            name="ck_cost_profile_scope_key_matches_product",
+        ),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_to > effective_from",
+            name="ck_cost_profile_effective_window",
+        ),
+        CheckConstraint(
+            "supplier_unit_cost >= 0 AND freight_cost >= 0 AND prep_packaging_cost >= 0 "
+            "AND prep_cost >= 0 AND packaging_cost >= 0 AND overhead_cost >= 0",
+            name="ck_cost_profile_money_nonnegative",
+        ),
+        CheckConstraint(
+            "gst_rate_percent >= 0 AND gst_rate_percent <= 100 "
+            "AND gst_recoverable_percent >= 0 AND gst_recoverable_percent <= 100 "
+            "AND advertising_rate_percent >= 0 AND advertising_rate_percent <= 100 "
+            "AND returns_rate_percent >= 0 AND returns_rate_percent <= 100 "
+            "AND minimum_margin_percent >= 0 AND minimum_margin_percent < 100 "
+            "AND target_margin_percent >= minimum_margin_percent "
+            "AND target_margin_percent < 100",
+            name="ck_cost_profile_percentages",
+        ),
+        CheckConstraint(
+            "referral_fee_rate_percent IS NULL OR "
+            "(referral_fee_rate_percent >= 0 AND referral_fee_rate_percent <= 100)",
+            name="ck_cost_profile_referral_percentage",
+        ),
+        CheckConstraint(
+            "fulfilment_fee IS NULL OR fulfilment_fee >= 0",
+            name="ck_cost_profile_fulfilment_nonnegative",
+        ),
+        CheckConstraint(
+            "closing_fee IS NULL OR closing_fee >= 0",
+            name="ck_cost_profile_closing_nonnegative",
+        ),
+        CheckConstraint(
+            "storage_fee IS NULL OR storage_fee >= 0",
+            name="ck_cost_profile_storage_nonnegative",
+        ),
+        Index(
+            "ix_cost_profiles_scope_effective",
+            "organisation_id",
+            "marketplace_id",
+            "profile_scope_key",
+            "effective_from",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     organisation_id: Mapped[str] = mapped_column(
         ForeignKey("organisations.id"), nullable=False, index=True
     )
+    marketplace_id: Mapped[str] = mapped_column(
+        ForeignKey("marketplaces.id"), nullable=False, index=True
+    )
     product_id: Mapped[str | None] = mapped_column(ForeignKey("products.id"), index=True)
+    profile_scope_key: Mapped[str] = mapped_column(String(36), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    supersedes_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cost_profiles.id"), index=True
+    )
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    supplier_unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    selling_price_tax_basis: Mapped[SellingPriceTaxBasis | None] = mapped_column(
+        SAEnum(SellingPriceTaxBasis)
+    )
+    supplier_unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     freight_cost: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2), default=Decimal("0.00"), nullable=False
+        Numeric(14, 4), default=Decimal("0.0000"), nullable=False
     )
     prep_packaging_cost: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2), default=Decimal("0.00"), nullable=False
+        Numeric(14, 4), default=Decimal("0.0000"), nullable=False
     )
+    prep_cost: Mapped[Decimal] = mapped_column(
+        Numeric(14, 4), default=Decimal("0.0000"), nullable=False
+    )
+    packaging_cost: Mapped[Decimal] = mapped_column(
+        Numeric(14, 4), default=Decimal("0.0000"), nullable=False
+    )
+    gst_rate_percent: Mapped[Decimal] = mapped_column(
+        Numeric(7, 4), default=Decimal("0.0000"), nullable=False
+    )
+    gst_recoverable_percent: Mapped[Decimal] = mapped_column(
+        Numeric(7, 4), default=Decimal("0.0000"), nullable=False
+    )
+    advertising_rate_percent: Mapped[Decimal] = mapped_column(
+        Numeric(7, 4), default=Decimal("0.0000"), nullable=False
+    )
+    returns_rate_percent: Mapped[Decimal] = mapped_column(
+        Numeric(7, 4), default=Decimal("0.0000"), nullable=False
+    )
+    overhead_cost: Mapped[Decimal] = mapped_column(
+        Numeric(14, 4), default=Decimal("0.0000"), nullable=False
+    )
+    referral_fee_rate_percent: Mapped[Decimal | None] = mapped_column(Numeric(7, 4))
+    fulfilment_fee: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    closing_fee: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    storage_fee: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    fee_source: Mapped[str | None] = mapped_column(String(255))
+    fee_effective_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    fee_status: Mapped[FeeInputStatus | None] = mapped_column(SAEnum(FeeInputStatus))
+    minimum_margin_percent: Mapped[Decimal] = mapped_column(
+        Numeric(7, 4), default=Decimal("0.0000"), nullable=False
+    )
+    target_margin_percent: Mapped[Decimal] = mapped_column(
+        Numeric(7, 4), default=Decimal("0.0000"), nullable=False
+    )
+    configuration_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
     effective_from: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    effective_to: Mapped[datetime | None] = mapped_column(UTCDateTime(), active_history=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     product: Mapped[Product | None] = relationship(back_populates="cost_profiles")
+
+
+@event.listens_for(CostProfile, "before_insert")
+def _require_new_cost_profile_tax_basis(
+    _mapper: Any, _connection: Any, target: CostProfile
+) -> None:
+    if target.selling_price_tax_basis is None:
+        raise ValueError("New cost profiles require an explicit selling-price tax basis")
+
+
+@event.listens_for(CostProfile, "before_update")
+def _allow_cost_profile_closure_only(mapper: Any, _connection: Any, target: CostProfile) -> None:
+    state = sa_inspect(target)
+    changed_columns = {
+        column.key
+        for column in mapper.column_attrs
+        if state.attrs[column.key].history.has_changes()
+    }
+    history = state.attrs.effective_to.history
+    new_value = history.added[0] if history.added else None
+    old_value = history.deleted[0] if history.deleted else None
+    if (
+        changed_columns != {"effective_to"}
+        or old_value is not None
+        or not isinstance(new_value, datetime)
+        or new_value.tzinfo is None
+        or new_value.utcoffset() != timedelta(0)
+    ):
+        raise ValueError(
+            "Cost profiles are append-only; only a one-time UTC effective_to closure is allowed"
+        )
+
+
+@event.listens_for(CostProfile, "before_delete")
+def _prevent_cost_profile_delete(_mapper: Any, _connection: Any, _target: CostProfile) -> None:
+    raise ValueError("Cost profiles are append-only")
 
 
 class Supplier(Base):
@@ -466,17 +626,140 @@ class Supplier(Base):
 
 class SupplierOffer(Base):
     __tablename__ = "supplier_offers"
+    __table_args__ = (
+        CheckConstraint("unit_cost >= 0", name="ck_supplier_offer_unit_cost_nonnegative"),
+        CheckConstraint("minimum_order_quantity >= 1", name="ck_supplier_offer_moq_positive"),
+        CheckConstraint("lead_time_days >= 0", name="ck_supplier_offer_lead_time_nonnegative"),
+        Index(
+            "ix_supplier_offers_scope_product_quoted",
+            "organisation_id",
+            "marketplace_id",
+            "product_id",
+            "quotation_date",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organisation_id: Mapped[str] = mapped_column(
+        ForeignKey("organisations.id"), nullable=False, index=True
+    )
+    marketplace_id: Mapped[str] = mapped_column(
+        ForeignKey("marketplaces.id"), nullable=False, index=True
+    )
     supplier_id: Mapped[str] = mapped_column(ForeignKey("suppliers.id"), nullable=False, index=True)
     product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
+    supplier_name_at_quote: Mapped[str] = mapped_column(String(255), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     minimum_order_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     lead_time_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    quotation_date: Mapped[date] = mapped_column(Date(), nullable=False)
     valid_until: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     supplier: Mapped[Supplier] = relationship(back_populates="offers")
+    product: Mapped[Product] = relationship(back_populates="supplier_offers")
+    price_tiers: Mapped[list[SupplierOfferPriceTier]] = relationship(
+        back_populates="offer",
+        cascade="all, delete-orphan",
+        order_by="SupplierOfferPriceTier.minimum_quantity",
+    )
+
+
+class SupplierOfferPriceTier(Base):
+    __tablename__ = "supplier_offer_price_tiers"
+    __table_args__ = (
+        UniqueConstraint(
+            "supplier_offer_id", "minimum_quantity", name="uq_supplier_offer_tier_quantity"
+        ),
+        CheckConstraint("minimum_quantity >= 1", name="ck_supplier_offer_tier_quantity_positive"),
+        CheckConstraint("unit_cost >= 0", name="ck_supplier_offer_tier_cost_nonnegative"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    supplier_offer_id: Mapped[str] = mapped_column(
+        ForeignKey("supplier_offers.id"), nullable=False, index=True
+    )
+    minimum_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+
+    offer: Mapped[SupplierOffer] = relationship(back_populates="price_tiers")
+
+
+@event.listens_for(SupplierOfferPriceTier, "before_insert")
+def _only_insert_tiers_with_new_offer(
+    _mapper: Any, _connection: Any, target: SupplierOfferPriceTier
+) -> None:
+    offer = target.offer
+    if offer is None or not sa_inspect(offer).pending:
+        raise ValueError("Price tiers may only be inserted with a new supplier quotation")
+
+
+class TestBuyRecommendation(Base):
+    __tablename__ = "test_buy_recommendations"
+    __table_args__ = (
+        CheckConstraint("budget_amount >= 0", name="ck_test_buy_budget_nonnegative"),
+        CheckConstraint("advisory_only = true", name="ck_test_buy_advisory_only"),
+        Index(
+            "ix_test_buy_scope_product_created",
+            "organisation_id",
+            "marketplace_id",
+            "product_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organisation_id: Mapped[str] = mapped_column(
+        ForeignKey("organisations.id"), nullable=False, index=True
+    )
+    marketplace_id: Mapped[str] = mapped_column(
+        ForeignKey("marketplaces.id"), nullable=False, index=True
+    )
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
+    supplier_offer_id: Mapped[str] = mapped_column(
+        ForeignKey("supplier_offers.id"), nullable=False, index=True
+    )
+    source_snapshot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("product_snapshots.id"), index=True
+    )
+    data_confidence_score_result_id: Mapped[str | None] = mapped_column(
+        ForeignKey("score_results.id"), index=True
+    )
+    budget_amount: Mapped[Decimal] = mapped_column(Numeric(16, 2), nullable=False)
+    budget_currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    formula_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    configuration_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    inputs: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    scenarios: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    notices: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    outcome: Mapped[TestBuyOutcome] = mapped_column(SAEnum(TestBuyOutcome), nullable=False)
+    advisory_only: Mapped[bool] = mapped_column(default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+@event.listens_for(SupplierOffer, "before_update")
+@event.listens_for(SupplierOfferPriceTier, "before_update")
+@event.listens_for(TestBuyRecommendation, "before_update")
+def _prevent_sourcing_evidence_update(
+    _mapper: Any,
+    _connection: Any,
+    _target: SupplierOffer | SupplierOfferPriceTier | TestBuyRecommendation,
+) -> None:
+    raise ValueError("Supplier quotations and test-buy recommendations are immutable")
+
+
+@event.listens_for(SupplierOffer, "before_delete")
+@event.listens_for(SupplierOfferPriceTier, "before_delete")
+@event.listens_for(TestBuyRecommendation, "before_delete")
+def _prevent_sourcing_evidence_delete(
+    _mapper: Any,
+    _connection: Any,
+    _target: SupplierOffer | SupplierOfferPriceTier | TestBuyRecommendation,
+) -> None:
+    raise ValueError("Supplier quotations and test-buy recommendations are immutable")
 
 
 class InventoryPosition(Base):
@@ -536,3 +819,13 @@ class AuditEvent(Base):
     correlation_id: Mapped[str | None] = mapped_column(String(64), index=True)
     causation_id: Mapped[str | None] = mapped_column(String(64), index=True)
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+@event.listens_for(AuditEvent, "before_update")
+def _prevent_audit_event_update(_mapper: Any, _connection: Any, _target: AuditEvent) -> None:
+    raise ValueError("Audit events are immutable")
+
+
+@event.listens_for(AuditEvent, "before_delete")
+def _prevent_audit_event_delete(_mapper: Any, _connection: Any, _target: AuditEvent) -> None:
+    raise ValueError("Audit events are immutable")

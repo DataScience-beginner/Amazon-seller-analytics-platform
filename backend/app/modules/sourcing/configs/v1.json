@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "formula_version": "selleros.test-buy.v1",
+  "days_per_month": "30",
+  "low_confidence_below": 50,
+  "low_confidence_cap_days": "14",
+  "money_quantum": "0.01",
+  "sell_through_quantum": "0.1",
+  "scenarios": {
+    "conservative": {
+      "base_coverage_days": "14",
+      "lead_time_factor": "0.25",
+      "maximum_coverage_days": "30"
+    },
+    "expected": {
+      "base_coverage_days": "30",
+      "lead_time_factor": "0.50",
+      "maximum_coverage_days": "60"
+    },
+    "aggressive": {
+      "base_coverage_days": "45",
+      "lead_time_factor": "1.00",
+      "maximum_coverage_days": "90"
+    }
+  }
+}

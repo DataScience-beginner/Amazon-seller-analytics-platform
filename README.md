@@ -112,3 +112,10 @@ alembic revision --autogenerate -m "describe change"
 ## Canonical domain model
 
 See `docs/ARCHITECTURE.md` for the Phase 0 architecture, prototype limitations and domain model principles.
+
+## Product reference research
+
+See [`docs/competitive/README.md`](docs/competitive/README.md) for current Helium 10, Amazon Seller
+Central and Jungle Scout walkthroughs, a feature matrix, and the resulting SellerOS backend/frontend
+reference blueprint. This research is reference material; `docs/IMPLEMENTATION_BACKLOG.md` remains
+the delivery contract.

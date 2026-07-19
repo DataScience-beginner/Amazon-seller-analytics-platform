@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -14,7 +14,7 @@ async def test_health_endpoint_reports_database_ok(test_engine: Engine) -> None:
     app = create_app()
     testing_session = sessionmaker(bind=test_engine, autoflush=False, expire_on_commit=False)
 
-    async def override_get_db() -> AsyncGenerator[Session, None]:
+    def override_get_db() -> Generator[Session, None, None]:
         with testing_session() as session:
             yield session
 

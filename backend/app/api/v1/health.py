@@ -11,7 +11,7 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("")
-async def health(
+def health(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, str]:
     settings = get_settings()

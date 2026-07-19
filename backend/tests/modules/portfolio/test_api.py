@@ -1,0 +1,524 @@
+from __future__ import annotations
+
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.core.errors import ApplicationError
+from app.db.session import get_db
+from app.models.domain import (
+    Marketplace,
+    Organisation,
+    Product,
+    ProductSnapshot,
+    ScoreResult,
+    StrategyRecommendation,
+)
+from app.modules.portfolio.api import router as portfolio_router
+
+
+@contextmanager
+def _api_client(session: Session) -> Iterator[TestClient]:
+    app = FastAPI()
+    app.include_router(portfolio_router, prefix="/api/v1")
+
+    @app.exception_handler(ApplicationError)
+    async def application_error_handler(_request: Request, error: ApplicationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=error.status_code,
+            content={"error": {"code": error.code, "message": error.message}},
+        )
+
+    def override_get_db() -> Generator[Session, None, None]:
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as client:
+        yield client
+
+
+def _add_workspace(
+    session: Session, *, organisation_id: str, marketplace_id: str, code: str
+) -> tuple[Organisation, Marketplace]:
+    organisation = Organisation(id=organisation_id, name=f"Synthetic {organisation_id}")
+    marketplace = Marketplace(
+        id=marketplace_id,
+        organisation=organisation,
+        code=code,
+        name=f"Amazon {code}",
+        default_currency_code="INR" if code == "IN" else "USD",
+    )
+    session.add_all([organisation, marketplace])
+    session.flush()
+    return organisation, marketplace
+
+
+def _evidence() -> list[dict[str, object]]:
+    return [
+        {
+            "reason_code": "demand_strong",
+            "polarity": "positive",
+            "source": "market_score",
+            "signal": "demand",
+            "observed_value": 82,
+            "comparison": "gte",
+            "threshold_value": 65,
+            "threshold_upper_value": None,
+            "statement": "Demand meets the configured threshold.",
+        },
+        {
+            "reason_code": "data_confidence_sufficient",
+            "polarity": "informational",
+            "source": "market_score",
+            "signal": "data_confidence",
+            "observed_value": 80,
+            "comparison": "gte",
+            "threshold_value": 50,
+            "threshold_upper_value": None,
+            "statement": "Data confidence permits this recommendation.",
+        },
+    ]
+
+
+def _add_score(
+    session: Session,
+    snapshot: ProductSnapshot,
+    *,
+    name: str,
+    value: int,
+    version: str = "selleros.market-opportunity.v1",
+    created_at: datetime | None = None,
+) -> ScoreResult:
+    score = ScoreResult(
+        snapshot=snapshot,
+        score_name=name,
+        formula_version=version,
+        configuration_checksum="score-config-checksum",
+        score_value=value,
+        inputs={"source": "synthetic"},
+        reason_codes=[],
+        created_at=created_at or datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    session.add(score)
+    return score
+
+
+def _add_product(
+    session: Session,
+    *,
+    product_id: str,
+    organisation_id: str,
+    marketplace_id: str,
+    asin: str,
+    title: str,
+    brand: str,
+    category: str,
+    price: str,
+    offers: int,
+    overall_score: int,
+    confidence: int,
+    strategy: str,
+) -> Product:
+    product = Product(
+        id=product_id,
+        organisation_id=organisation_id,
+        marketplace_id=marketplace_id,
+        asin=asin,
+        title=title,
+        brand=brand,
+        category=category,
+    )
+    session.add(product)
+    session.flush()
+    snapshot = ProductSnapshot(
+        id=f"snapshot-{product_id}",
+        product=product,
+        snapshot_at=datetime(2026, 1, 1, tzinfo=UTC),
+        buy_box_price=Decimal(price),
+        buy_box_price_90d=Decimal(price),
+        currency_code="INR",
+        sales_rank=10_000,
+        sales_rank_90d=12_000,
+        sales_rank_drops_90d=80,
+        monthly_sold=200,
+        new_offer_count=offers,
+        review_count=120,
+        buy_box_winner_count_90d=2,
+        buy_box_oos_percentage_90d=Decimal("2.5"),
+    )
+    session.add(snapshot)
+    session.flush()
+    product.latest_snapshot_id = snapshot.id
+    _add_score(session, snapshot, name="overall_opportunity", value=overall_score)
+    _add_score(session, snapshot, name="data_confidence", value=confidence)
+    session.add(
+        StrategyRecommendation(
+            snapshot=snapshot,
+            strategy=strategy,
+            rules_version="strategy-v1.0.0",
+            configuration_checksum="strategy-config-checksum",
+            confidence_score=confidence,
+            evidence=_evidence(),
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+    session.flush()
+    return product
+
+
+def test_empty_dashboard_is_scoped_and_actionable(db_session: Session) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-a",
+        marketplace_id="marketplace-a",
+        code="IN",
+    )
+    _, other_marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-b",
+        marketplace_id="marketplace-b",
+        code="US",
+    )
+    db_session.commit()
+
+    with _api_client(db_session) as client:
+        response = client.get(
+            "/api/v1/dashboard",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+            },
+        )
+        cross_tenant = client.get(
+            "/api/v1/dashboard",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": other_marketplace.id,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tracked_product_count"] == 0
+    assert payload["latest_import"] is None
+    assert payload["strategy_distribution"] == [
+        {"strategy": "discovery", "count": 0},
+        {"strategy": "test_buy", "count": 0},
+        {"strategy": "growth", "count": 0},
+        {"strategy": "cash_cow", "count": 0},
+        {"strategy": "premium_margin", "count": 0},
+        {"strategy": "monitor", "count": 0},
+        {"strategy": "clearance_watch", "count": 0},
+        {"strategy": "avoid", "count": 0},
+    ]
+    assert payload["empty_state"]["primary_action"] == "open_imports"
+    assert [kpi["id"] for kpi in payload["kpis"]] == [
+        "tracked_products",
+        "classified_products",
+        "average_opportunity_score",
+        "low_confidence_products",
+    ]
+    assert cross_tenant.status_code == 404
+    assert cross_tenant.json()["error"]["code"] == "resource_not_found"
+
+
+def test_product_filters_sort_pagination_and_tenant_scope(db_session: Session) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-a",
+        marketplace_id="marketplace-a",
+        code="IN",
+    )
+    other_organisation, other_marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-b",
+        marketplace_id="marketplace-b",
+        code="US",
+    )
+    first = _add_product(
+        db_session,
+        product_id="00000000-0000-0000-0000-000000000001",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000000001",
+        title="Alpha storage box",
+        brand="Acme",
+        category="Home",
+        price="19.99",
+        offers=3,
+        overall_score=80,
+        confidence=80,
+        strategy="growth",
+    )
+    second = _add_product(
+        db_session,
+        product_id="00000000-0000-0000-0000-000000000002",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000000002",
+        title="Beta storage box",
+        brand="Acme",
+        category="Home",
+        price="25.00",
+        offers=5,
+        overall_score=80,
+        confidence=70,
+        strategy="growth",
+    )
+    _add_product(
+        db_session,
+        product_id="00000000-0000-0000-0000-000000000003",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000000003",
+        title="Gamma toy",
+        brand="Different",
+        category="Toys",
+        price="9.00",
+        offers=15,
+        overall_score=20,
+        confidence=90,
+        strategy="avoid",
+    )
+    _add_product(
+        db_session,
+        product_id="00000000-0000-0000-0000-000000000004",
+        organisation_id=other_organisation.id,
+        marketplace_id=other_marketplace.id,
+        asin="B000000004",
+        title="Other tenant product",
+        brand="Acme",
+        category="Home",
+        price="20.00",
+        offers=4,
+        overall_score=99,
+        confidence=99,
+        strategy="growth",
+    )
+    db_session.commit()
+    params: dict[str, str | int] = {
+        "organisation_id": organisation.id,
+        "marketplace_id": marketplace.id,
+        "search": "Acme",
+        "strategy": "growth",
+        "category": "home",
+        "min_score": 80,
+        "max_score": 80,
+        "min_offer_count": 3,
+        "max_offer_count": 5,
+        "min_price": "10.00",
+        "max_price": "30.00",
+        "min_confidence": 60,
+        "max_confidence": 90,
+        "sort_by": "overall_opportunity",
+        "sort_direction": "desc",
+        "page_size": 1,
+    }
+
+    with _api_client(db_session) as client:
+        first_page = client.get("/api/v1/products", params={**params, "page": 1})
+        second_page = client.get("/api/v1/products", params={**params, "page": 2})
+        asin_search = client.get(
+            "/api/v1/products",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+                "search": "B000000003",
+            },
+        )
+
+    assert first_page.status_code == 200
+    first_payload = first_page.json()
+    second_payload = second_page.json()
+    assert first_payload["pagination"] == {
+        "page": 1,
+        "page_size": 1,
+        "total_items": 2,
+        "total_pages": 2,
+        "has_previous": False,
+        "has_next": True,
+    }
+    assert first_payload["items"][0]["product_id"] == first.id
+    assert second_payload["items"][0]["product_id"] == second.id
+    assert second_payload["pagination"]["has_previous"] is True
+    assert asin_search.json()["items"][0]["asin"] == "B000000003"
+
+
+def test_product_detail_returns_latest_evidence_and_last_24_snapshots(
+    db_session: Session,
+) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-a",
+        marketplace_id="marketplace-a",
+        code="IN",
+    )
+    product = Product(
+        id="00000000-0000-0000-0000-000000000010",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000000010",
+        title="Historical product",
+        brand="Synthetic",
+        category="Home",
+        amazon_url="javascript:alert(1)",
+    )
+    db_session.add(product)
+    db_session.flush()
+    started_at = datetime(2024, 1, 1, tzinfo=UTC)
+    snapshots: list[ProductSnapshot] = []
+    for offset in range(25):
+        snapshot = ProductSnapshot(
+            id=f"snapshot-history-{offset:02d}",
+            product=product,
+            snapshot_at=started_at + timedelta(days=offset),
+            buy_box_price=Decimal("24.99"),
+            buy_box_price_90d=Decimal("25.50"),
+            currency_code="INR",
+            sales_rank=8_000 + offset,
+            sales_rank_90d=9_000,
+            sales_rank_drops_90d=75,
+            review_rating=Decimal("4.25"),
+            review_count=200,
+            new_offer_count=4,
+            buy_box_winner_count_90d=2,
+            monthly_sold=180,
+            # Deliberately omitted to produce an explicit missing-data notice.
+            buy_box_oos_percentage_90d=None,
+        )
+        db_session.add(snapshot)
+        db_session.flush()
+        snapshots.append(snapshot)
+        db_session.add(
+            StrategyRecommendation(
+                snapshot=snapshot,
+                strategy="monitor",
+                rules_version="strategy-v1.0.0",
+                configuration_checksum="strategy-config-checksum",
+                confidence_score=70,
+                evidence=_evidence(),
+                created_at=snapshot.snapshot_at,
+            )
+        )
+
+    latest = snapshots[-1]
+    product.latest_snapshot_id = latest.id
+    for name, value in (
+        ("demand", 82),
+        ("competition", 68),
+        ("price_stability", 74),
+        ("data_confidence", 85),
+    ):
+        _add_score(db_session, latest, name=name, value=value, created_at=latest.snapshot_at)
+    _add_score(
+        db_session,
+        latest,
+        name="overall_opportunity",
+        value=70,
+        version="selleros.market-opportunity.v1",
+        created_at=latest.snapshot_at,
+    )
+    newest_score = _add_score(
+        db_session,
+        latest,
+        name="overall_opportunity",
+        value=81,
+        version="selleros.market-opportunity.v2",
+        created_at=latest.snapshot_at + timedelta(seconds=1),
+    )
+    newest_recommendation = StrategyRecommendation(
+        snapshot=latest,
+        strategy="growth",
+        rules_version="strategy-v2.0.0",
+        configuration_checksum="strategy-config-v2-checksum",
+        confidence_score=85,
+        evidence=_evidence(),
+        created_at=latest.snapshot_at + timedelta(seconds=1),
+    )
+    db_session.add(newest_recommendation)
+    db_session.commit()
+
+    with _api_client(db_session) as client:
+        response = client.get(
+            f"/api/v1/products/{product.id}",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["product"]["amazon_url"] == "https://www.amazon.in/dp/B000000010"
+    assert len(payload["snapshot_history"]) == 24
+    assert payload["snapshot_history"][0]["id"] == latest.id
+    assert payload["snapshot_history"][-1]["id"] == snapshots[1].id
+    latest_payload = payload["latest_snapshot"]
+    assert latest_payload["scores"][-1]["id"] == newest_score.id
+    assert latest_payload["scores"][-1]["value"] == 81
+    assert latest_payload["recommendation"]["id"] == newest_recommendation.id
+    assert latest_payload["recommendation"]["strategy"] == "growth"
+    assert latest_payload["recommendation"]["evidence"][0]["reason_code"] == "demand_strong"
+    assert payload["strategy_history"][0]["strategy"] == "growth"
+    assert any(notice["field"] == "buy_box_oos_percentage_90d" for notice in payload["notices"])
+
+
+def test_product_detail_hides_unsupported_recommendation_without_evidence(
+    db_session: Session,
+) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-a",
+        marketplace_id="marketplace-a",
+        code="IN",
+    )
+    product = _add_product(
+        db_session,
+        product_id="00000000-0000-0000-0000-000000000020",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000000020",
+        title="Evidence safety product",
+        brand="Synthetic",
+        category="Home",
+        price="15.00",
+        offers=2,
+        overall_score=70,
+        confidence=75,
+        strategy="test_buy",
+    )
+    latest = db_session.get(ProductSnapshot, product.latest_snapshot_id)
+    assert latest is not None
+    db_session.add(
+        StrategyRecommendation(
+            snapshot=latest,
+            strategy="growth",
+            rules_version="strategy-v2.0.0",
+            configuration_checksum="invalid-no-evidence",
+            confidence_score=90,
+            evidence=[],
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+    )
+    db_session.commit()
+
+    with _api_client(db_session) as client:
+        response = client.get(
+            f"/api/v1/products/{product.id}",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["latest_snapshot"]["recommendation"] is None
+    assert payload["strategy_history"] == []
+    assert "recommendation_evidence_missing" in {notice["code"] for notice in payload["notices"]}

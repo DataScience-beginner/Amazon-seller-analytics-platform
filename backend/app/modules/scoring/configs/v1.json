@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "formula_version": "selleros.market-opportunity.v1",
+  "metric_bounds": {
+    "sales_rank_current": {"minimum": "1", "maximum": "100000000"},
+    "sales_rank_90_day_average": {"minimum": "1", "maximum": "100000000"},
+    "rank_drops_90_days": {"minimum": "0", "maximum": "1000000"},
+    "monthly_sold": {"minimum": "0", "maximum": "1000000"},
+    "offer_count": {"minimum": "0", "maximum": "100000"},
+    "review_count": {"minimum": "0", "maximum": "1000000000"},
+    "buy_box_winner_count_90_days": {"minimum": "0", "maximum": "1000000"},
+    "buy_box_price": {"minimum": "0.01", "maximum": "1000000000"},
+    "buy_box_price_90_day_average": {"minimum": "0.01", "maximum": "1000000000"},
+    "buy_box_oos_percent": {"minimum": "0", "maximum": "100"}
+  },
+  "component_scores": {
+    "demand": {
+      "sales_rank_current": {
+        "weight": "0.35",
+        "full_score_at": "10000",
+        "zero_score_at": "500000"
+      },
+      "rank_drops_90_days": {
+        "weight": "0.25",
+        "full_score_at": "90",
+        "zero_score_at": "0"
+      },
+      "monthly_sold": {
+        "weight": "0.25",
+        "full_score_at": "300",
+        "zero_score_at": "0"
+      },
+      "rank_trend_ratio": {
+        "weight": "0.15",
+        "full_score_at": "0.75",
+        "zero_score_at": "1.25"
+      }
+    },
+    "competition": {
+      "offer_count": {
+        "weight": "0.50",
+        "full_score_at": "1",
+        "zero_score_at": "25"
+      },
+      "review_count": {
+        "weight": "0.30",
+        "full_score_at": "25",
+        "zero_score_at": "5000"
+      },
+      "buy_box_winner_count_90_days": {
+        "weight": "0.20",
+        "full_score_at": "1",
+        "zero_score_at": "12"
+      }
+    },
+    "price_stability": {
+      "price_deviation_ratio": {
+        "weight": "0.75",
+        "full_score_at": "0",
+        "zero_score_at": "0.30"
+      },
+      "buy_box_oos_percent": {
+        "weight": "0.25",
+        "full_score_at": "0",
+        "zero_score_at": "30"
+      }
+    }
+  },
+  "data_confidence_weights": {
+    "sales_rank_current": "0.15",
+    "sales_rank_90_day_average": "0.10",
+    "rank_drops_90_days": "0.10",
+    "monthly_sold": "0.10",
+    "offer_count": "0.10",
+    "review_count": "0.05",
+    "buy_box_winner_count_90_days": "0.05",
+    "buy_box_price": "0.15",
+    "buy_box_price_90_day_average": "0.15",
+    "buy_box_oos_percent": "0.05"
+  },
+  "overall_weights": {
+    "demand": "0.45",
+    "competition": "0.30",
+    "price_stability": "0.25"
+  },
+  "overall_confidence_adjustment": "multiply",
+  "score_bands": {"weak_below": 40, "strong_at_or_above": 70}
+}

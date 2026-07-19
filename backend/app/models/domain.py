@@ -9,7 +9,6 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     CheckConstraint,
-    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -22,7 +21,12 @@ from sqlalchemy import (
 from sqlalchemy import (
     Enum as SAEnum,
 )
+from sqlalchemy import (
+    inspect as sa_inspect,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from app.db.types import UTCDateTime
 
 
 def utc_now() -> datetime:
@@ -44,14 +48,29 @@ class SnapshotKind(StrEnum):
     manual = "manual"
 
 
+class MappingStatus(StrEnum):
+    mapped = "mapped"
+    unknown = "unknown"
+    ambiguous = "ambiguous"
+
+
+class MappingSource(StrEnum):
+    registry = "registry"
+    user = "user"
+    unmapped = "unmapped"
+
+
+class RowErrorSeverity(StrEnum):
+    error = "error"
+    warning = "warning"
+
+
 class Organisation(Base):
     __tablename__ = "organisations"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     users: Mapped[list[User]] = relationship(back_populates="organisation")
     marketplaces: Mapped[list[Marketplace]] = relationship(back_populates="organisation")
@@ -67,9 +86,7 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     organisation: Mapped[Organisation] = relationship(back_populates="users")
 
@@ -93,7 +110,28 @@ class Marketplace(Base):
 class ImportBatch(Base):
     __tablename__ = "import_batches"
     __table_args__ = (
-        UniqueConstraint("organisation_id", "checksum", name="uq_import_org_checksum"),
+        UniqueConstraint(
+            "organisation_id",
+            "marketplace_id",
+            "checksum",
+            name="uq_import_org_marketplace_checksum",
+        ),
+        Index(
+            "ix_import_batches_org_marketplace_uploaded",
+            "organisation_id",
+            "marketplace_id",
+            "uploaded_at",
+        ),
+        CheckConstraint("file_size_bytes >= 0", name="ck_import_file_size_nonnegative"),
+        CheckConstraint(
+            "header_row_number IS NULL OR header_row_number >= 1",
+            name="ck_import_header_row_positive",
+        ),
+        CheckConstraint(
+            "total_rows >= 0 AND created_rows >= 0 AND matched_rows >= 0 "
+            "AND skipped_rows >= 0 AND failed_rows >= 0",
+            name="ck_import_counts_nonnegative",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -105,13 +143,26 @@ class ImportBatch(Base):
     )
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     checksum: Mapped[str] = mapped_column(String(128), nullable=False)
+    checksum_algorithm: Mapped[str] = mapped_column(String(32), default="sha256", nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(255))
+    storage_key: Mapped[str | None] = mapped_column(String(255))
+    workbook_sheet_name: Mapped[str | None] = mapped_column(String(255))
+    header_row_number: Mapped[int | None] = mapped_column(Integer)
+    alias_registry_version: Mapped[str | None] = mapped_column(String(80))
     status: Mapped[ImportStatus] = mapped_column(
         SAEnum(ImportStatus), default=ImportStatus.pending, nullable=False
     )
-    uploaded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    uploaded_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    confirmed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    total_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    matched_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failure_code: Mapped[str | None] = mapped_column(String(120))
+    failure_message: Mapped[str | None] = mapped_column(String(500))
 
     columns: Mapped[list[ImportColumn]] = relationship(
         back_populates="import_batch", cascade="all, delete-orphan"
@@ -125,15 +176,28 @@ class ImportBatch(Base):
 class ImportColumn(Base):
     __tablename__ = "import_columns"
     __table_args__ = (
-        UniqueConstraint("import_batch_id", "source_header", name="uq_import_column_header"),
+        UniqueConstraint(
+            "import_batch_id", "source_column_ordinal", name="uq_import_column_position"
+        ),
+        CheckConstraint("source_column_ordinal >= 1", name="ck_import_column_position_positive"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     import_batch_id: Mapped[str] = mapped_column(
         ForeignKey("import_batches.id"), nullable=False, index=True
     )
+    source_column_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     source_header: Mapped[str] = mapped_column(String(512), nullable=False)
+    normalized_header: Mapped[str] = mapped_column(String(512), nullable=False)
     canonical_field: Mapped[str | None] = mapped_column(String(128))
+    mapping_status: Mapped[MappingStatus] = mapped_column(
+        SAEnum(MappingStatus), default=MappingStatus.unknown, nullable=False
+    )
+    mapping_source: Mapped[MappingSource] = mapped_column(
+        SAEnum(MappingSource), default=MappingSource.unmapped, nullable=False
+    )
+    mapping_candidates: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    sample_values: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=False)
     is_required: Mapped[bool] = mapped_column(default=False, nullable=False)
     is_mapped: Mapped[bool] = mapped_column(default=False, nullable=False)
 
@@ -142,6 +206,7 @@ class ImportColumn(Base):
 
 class ImportRowError(Base):
     __tablename__ = "import_row_errors"
+    __table_args__ = (CheckConstraint("row_number >= 1", name="ck_import_row_error_row_positive"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     import_batch_id: Mapped[str] = mapped_column(
@@ -149,6 +214,10 @@ class ImportRowError(Base):
     )
     row_number: Mapped[int] = mapped_column(Integer, nullable=False)
     field_name: Mapped[str | None] = mapped_column(String(128))
+    error_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    severity: Mapped[RowErrorSeverity] = mapped_column(
+        SAEnum(RowErrorSeverity), default=RowErrorSeverity.error, nullable=False
+    )
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
     import_batch: Mapped[ImportBatch] = relationship(back_populates="row_errors")
@@ -161,6 +230,9 @@ class Product(Base):
             "organisation_id", "marketplace_id", "asin", name="uq_product_org_marketplace_asin"
         ),
         Index("ix_products_org_marketplace", "organisation_id", "marketplace_id"),
+        Index(
+            "ix_products_org_marketplace_category", "organisation_id", "marketplace_id", "category"
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -173,19 +245,42 @@ class Product(Base):
     asin: Mapped[str] = mapped_column(String(20), nullable=False)
     title: Mapped[str | None] = mapped_column(String(1000))
     brand: Mapped[str | None] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
+    category: Mapped[str | None] = mapped_column(String(255))
+    subcategory: Mapped[str | None] = mapped_column(String(255))
+    image_url: Mapped[str | None] = mapped_column(String(2000))
+    amazon_url: Mapped[str | None] = mapped_column(String(2000))
+    latest_snapshot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("product_snapshots.id", use_alter=True, name="fk_product_latest_snapshot"),
+        index=True,
     )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     marketplace: Mapped[Marketplace] = relationship(back_populates="products")
-    snapshots: Mapped[list[ProductSnapshot]] = relationship(back_populates="product")
+    snapshots: Mapped[list[ProductSnapshot]] = relationship(
+        back_populates="product", foreign_keys="ProductSnapshot.product_id"
+    )
+    latest_snapshot: Mapped[ProductSnapshot | None] = relationship(
+        foreign_keys=[latest_snapshot_id], post_update=True
+    )
     cost_profiles: Mapped[list[CostProfile]] = relationship(back_populates="product")
     inventory_positions: Mapped[list[InventoryPosition]] = relationship(back_populates="product")
 
 
 class ProductSnapshot(Base):
     __tablename__ = "product_snapshots"
-    __table_args__ = (Index("ix_snapshots_product_taken_at", "product_id", "snapshot_at"),)
+    __table_args__ = (
+        UniqueConstraint("import_batch_id", "product_id", name="uq_snapshot_import_batch_product"),
+        Index("ix_snapshots_product_taken_at", "product_id", "snapshot_at"),
+        CheckConstraint(
+            "buy_box_oos_percentage_90d IS NULL OR "
+            "(buy_box_oos_percentage_90d >= 0 AND buy_box_oos_percentage_90d <= 100)",
+            name="ck_snapshot_oos_percentage",
+        ),
+        CheckConstraint(
+            "review_rating IS NULL OR (review_rating >= 0 AND review_rating <= 5)",
+            name="ck_snapshot_review_rating",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
@@ -193,13 +288,31 @@ class ProductSnapshot(Base):
     snapshot_kind: Mapped[SnapshotKind] = mapped_column(
         SAEnum(SnapshotKind), default=SnapshotKind.keepa, nullable=False
     )
-    snapshot_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    snapshot_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(1000))
+    brand: Mapped[str | None] = mapped_column(String(255))
+    category: Mapped[str | None] = mapped_column(String(255))
+    subcategory: Mapped[str | None] = mapped_column(String(255))
+    buy_box_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    buy_box_price_90d: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    currency_code: Mapped[str | None] = mapped_column(String(3))
+    sales_rank: Mapped[int | None] = mapped_column(Integer)
+    sales_rank_90d: Mapped[int | None] = mapped_column(Integer)
+    sales_rank_drops_90d: Mapped[int | None] = mapped_column(Integer)
+    review_rating: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    review_count: Mapped[int | None] = mapped_column(Integer)
+    new_offer_count: Mapped[int | None] = mapped_column(Integer)
+    total_offer_count: Mapped[int | None] = mapped_column(Integer)
+    buy_box_winner_count_90d: Mapped[int | None] = mapped_column(Integer)
+    buy_box_oos_percentage_90d: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    monthly_sold: Mapped[int | None] = mapped_column(Integer)
+    is_fba: Mapped[bool | None] = mapped_column()
+    image_url: Mapped[str | None] = mapped_column(String(2000))
+    amazon_url: Mapped[str | None] = mapped_column(String(2000))
     market_metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     source_row_number: Mapped[int | None] = mapped_column(Integer)
 
-    product: Mapped[Product] = relationship(back_populates="snapshots")
+    product: Mapped[Product] = relationship(back_populates="snapshots", foreign_keys=[product_id])
     import_batch: Mapped[ImportBatch | None] = relationship(back_populates="snapshots")
     raw_attributes: Mapped[list[RawAttribute]] = relationship(
         back_populates="snapshot", cascade="all, delete-orphan"
@@ -213,8 +326,10 @@ class ProductSnapshot(Base):
 
 
 @event.listens_for(ProductSnapshot, "before_update")
-def _prevent_snapshot_update(_mapper: Any, _connection: Any, _target: ProductSnapshot) -> None:
-    raise ValueError("Product snapshots are immutable")
+def _prevent_snapshot_update(mapper: Any, _connection: Any, target: ProductSnapshot) -> None:
+    state = sa_inspect(target)
+    if any(state.attrs[column.key].history.has_changes() for column in mapper.column_attrs):
+        raise ValueError("Product snapshots are immutable")
 
 
 @event.listens_for(ProductSnapshot, "before_delete")
@@ -225,13 +340,17 @@ def _prevent_snapshot_delete(_mapper: Any, _connection: Any, _target: ProductSna
 class RawAttribute(Base):
     __tablename__ = "raw_attributes"
     __table_args__ = (
-        UniqueConstraint("snapshot_id", "source_header", name="uq_raw_attribute_snapshot_header"),
+        UniqueConstraint(
+            "snapshot_id", "source_column_ordinal", name="uq_raw_attribute_snapshot_position"
+        ),
+        CheckConstraint("source_column_ordinal >= 1", name="ck_raw_attribute_position_positive"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("product_snapshots.id"), nullable=False, index=True
     )
+    source_column_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     source_header: Mapped[str] = mapped_column(String(512), nullable=False)
     value: Mapped[Any] = mapped_column(JSON, nullable=False)
 
@@ -244,6 +363,7 @@ class ScoreResult(Base):
         UniqueConstraint(
             "snapshot_id", "score_name", "formula_version", name="uq_score_snapshot_name_version"
         ),
+        CheckConstraint("score_value >= 0 AND score_value <= 100", name="ck_score_value_range"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -252,15 +372,26 @@ class ScoreResult(Base):
     )
     score_name: Mapped[str] = mapped_column(String(120), nullable=False)
     formula_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    configuration_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
     score_value: Mapped[int] = mapped_column(Integer, nullable=False)
     inputs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     reason_codes: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     snapshot: Mapped[ProductSnapshot] = relationship(back_populates="score_results")
 
 
 class StrategyRecommendation(Base):
     __tablename__ = "strategy_recommendations"
+    __table_args__ = (
+        UniqueConstraint(
+            "snapshot_id", "rules_version", name="uq_recommendation_snapshot_rules_version"
+        ),
+        CheckConstraint(
+            "confidence_score >= 0 AND confidence_score <= 100",
+            name="ck_recommendation_confidence_range",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     snapshot_id: Mapped[str] = mapped_column(
@@ -268,12 +399,34 @@ class StrategyRecommendation(Base):
     )
     strategy: Mapped[str] = mapped_column(String(80), nullable=False)
     rules_version: Mapped[str] = mapped_column(String(80), nullable=False)
-    evidence: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    configuration_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    confidence_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     snapshot: Mapped[ProductSnapshot] = relationship(back_populates="recommendations")
+
+
+@event.listens_for(RawAttribute, "before_update")
+@event.listens_for(ScoreResult, "before_update")
+@event.listens_for(StrategyRecommendation, "before_update")
+def _prevent_snapshot_evidence_update(
+    _mapper: Any,
+    _connection: Any,
+    _target: RawAttribute | ScoreResult | StrategyRecommendation,
+) -> None:
+    raise ValueError("Imported snapshot evidence is immutable")
+
+
+@event.listens_for(RawAttribute, "before_delete")
+@event.listens_for(ScoreResult, "before_delete")
+@event.listens_for(StrategyRecommendation, "before_delete")
+def _prevent_snapshot_evidence_delete(
+    _mapper: Any,
+    _connection: Any,
+    _target: RawAttribute | ScoreResult | StrategyRecommendation,
+) -> None:
+    raise ValueError("Imported snapshot evidence is immutable")
 
 
 class CostProfile(Base):
@@ -292,9 +445,7 @@ class CostProfile(Base):
     prep_packaging_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), default=Decimal("0.00"), nullable=False
     )
-    effective_from: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    effective_from: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     product: Mapped[Product | None] = relationship(back_populates="cost_profiles")
 
@@ -323,7 +474,7 @@ class SupplierOffer(Base):
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     minimum_order_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     lead_time_days: Mapped[int] = mapped_column(Integer, nullable=False)
-    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
     supplier: Mapped[Supplier] = relationship(back_populates="offers")
 
@@ -338,9 +489,7 @@ class InventoryPosition(Base):
     product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), nullable=False, index=True)
     units_on_hand: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     units_reserved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    measured_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    measured_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
     product: Mapped[Product] = relationship(back_populates="inventory_positions")
 
@@ -354,9 +503,7 @@ class ForecastScenario(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     assumptions: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
 
 class PricingPlan(Base):
@@ -370,9 +517,7 @@ class PricingPlan(Base):
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     minimum_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     target_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
 
 
 class AuditEvent(Base):
@@ -383,10 +528,11 @@ class AuditEvent(Base):
         ForeignKey("organisations.id"), nullable=False, index=True
     )
     actor_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    actor_type: Mapped[str] = mapped_column(String(32), default="system", nullable=False)
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(120), nullable=False)
     entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
     event_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
-    )
+    correlation_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    causation_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)

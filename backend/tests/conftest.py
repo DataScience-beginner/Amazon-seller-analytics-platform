@@ -1,26 +1,27 @@
 from collections.abc import Generator
 
 import pytest
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
+from app.db.session import create_db_engine
 
 
 @pytest.fixture()
 def test_engine() -> Generator[Engine, None, None]:
-    engine = create_engine(
+    engine = create_db_engine(
         "sqlite://",
-        connect_args={"check_same_thread": False},
         poolclass=StaticPool,
-        future=True,
     )
     Base.metadata.create_all(bind=engine)
     try:
         yield engine
     finally:
-        Base.metadata.drop_all(bind=engine)
+        # Disposing the sole StaticPool connection destroys this in-memory database.
+        # Calling drop_all() is unsafe here because SQLite cannot defer the intentional
+        # Product <-> latest snapshot foreign-key cycle while dropping tables.
         engine.dispose()
 
 

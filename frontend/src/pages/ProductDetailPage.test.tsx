@@ -168,6 +168,10 @@ describe('ProductDetailPage', () => {
       'href',
       'https://www.amazon.in/dp/B012345678',
     );
+    expect(screen.getByRole('link', { name: 'Plan costs and sourcing' })).toHaveAttribute(
+      'href',
+      '/planning?product_id=product-1',
+    );
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 

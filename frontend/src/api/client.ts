@@ -1,4 +1,8 @@
 import type {
+  CostProfile,
+  CreateCostProfileRequest,
+  CreateSupplierOfferRequest,
+  CreateTestBuyRequest,
   DashboardResponse,
   DashboardApiResponse,
   ImportBatch,
@@ -11,6 +15,10 @@ import type {
   ProductListApiResponse,
   ProductListResponse,
   ProductQuery,
+  ProductEconomicsResponse,
+  SupplierOffer,
+  SupplierOfferListResponse,
+  TestBuyRecommendation,
   Workspace,
   WorkspaceCreateRequest,
   WorkspaceListResponse,
@@ -266,4 +274,85 @@ export function fetchProduct(
     `/products/${encodeURIComponent(productId)}${queryString({ organisation_id: organisationId, marketplace_id: marketplaceId })}`,
     { signal },
   ).then(normalizeProductDetail);
+}
+
+export function fetchProductEconomics(
+  productId: string,
+  organisationId: string,
+  marketplaceId: string,
+  signal?: AbortSignal,
+): Promise<ProductEconomicsResponse> {
+  const scope = queryString({
+    organisation_id: organisationId,
+    marketplace_id: marketplaceId,
+  });
+  return request<ProductEconomicsResponse>(
+    `/products/${encodeURIComponent(productId)}/economics${scope}`,
+    { signal },
+  );
+}
+
+export function createCostProfile(
+  organisationId: string,
+  marketplaceId: string,
+  command: CreateCostProfileRequest,
+): Promise<CostProfile> {
+  const scope = queryString({
+    organisation_id: organisationId,
+    marketplace_id: marketplaceId,
+  });
+  return request<CostProfile>(`/cost-profiles${scope}`, {
+    method: 'POST',
+    body: command,
+  });
+}
+
+export function fetchSupplierOffers(
+  productId: string,
+  organisationId: string,
+  marketplaceId: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<SupplierOfferListResponse> {
+  const scope = queryString({
+    organisation_id: organisationId,
+    marketplace_id: marketplaceId,
+    page: String(page),
+    page_size: '100',
+  });
+  return request<SupplierOfferListResponse>(
+    `/products/${encodeURIComponent(productId)}/supplier-offers${scope}`,
+    { signal },
+  );
+}
+
+export function createSupplierOffer(
+  organisationId: string,
+  marketplaceId: string,
+  command: CreateSupplierOfferRequest,
+): Promise<SupplierOffer> {
+  const scope = queryString({
+    organisation_id: organisationId,
+    marketplace_id: marketplaceId,
+  });
+  return request<SupplierOffer>(`/supplier-offers${scope}`, {
+    method: 'POST',
+    body: command,
+  });
+}
+
+export function createTestBuyRecommendation(
+  productId: string,
+  organisationId: string,
+  marketplaceId: string,
+  command: CreateTestBuyRequest,
+): Promise<TestBuyRecommendation> {
+  const scope = queryString({
+    organisation_id: organisationId,
+    marketplace_id: marketplaceId,
+  });
+  return request<TestBuyRecommendation>(
+    `/products/${encodeURIComponent(productId)}/test-buy-scenarios${scope}`,
+    { method: 'POST', body: command },
+  );
 }

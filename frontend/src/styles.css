@@ -40,7 +40,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -48,6 +49,7 @@ button,
 a,
 input,
 select,
+textarea,
 summary {
   outline-offset: 3px;
 }
@@ -236,6 +238,12 @@ h2 {
   flex: 0 0 auto;
 }
 
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .eyebrow,
 .data-label,
 .feature-label {
@@ -346,7 +354,8 @@ h2 {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   min-height: 44px;
   padding: 9px 10px;
@@ -354,6 +363,47 @@ h2 {
   border-radius: 8px;
   color: var(--ink);
   background: #fff;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field-error {
+  color: var(--critical);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.choice-group legend {
+  padding: 0 5px;
+  color: #344054;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.choice-group label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.choice-group input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand);
 }
 
 .field small,
@@ -667,7 +717,8 @@ h2 {
 
 .definitions summary,
 .advanced-filters summary,
-.raw-attributes summary {
+.raw-attributes summary,
+.trace-details summary {
   color: var(--brand-dark);
   font-weight: 800;
   cursor: pointer;
@@ -675,7 +726,8 @@ h2 {
 
 .definitions[open] summary,
 .advanced-filters[open] summary,
-.raw-attributes[open] summary {
+.raw-attributes[open] summary,
+.trace-details[open] summary {
   margin-bottom: 16px;
 }
 
@@ -1055,6 +1107,287 @@ tbody tr:hover {
   color: var(--muted);
 }
 
+.planning-stack {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.product-planner-picker,
+.planning-context {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.product-planner-picker h2,
+.product-planner-picker p,
+.planning-context span,
+.planning-context strong,
+.planning-context small {
+  margin: 0;
+}
+
+.planning-context {
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #eef7f3;
+}
+
+.planning-context > div {
+  display: grid;
+  gap: 3px;
+}
+
+.planning-context span,
+.planning-context small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.economics-form h3,
+.trace-grid h3 {
+  margin: 22px 0 10px;
+  color: #344054;
+  font-size: 0.92rem;
+}
+
+.economics-form__dates,
+.economics-form__fields {
+  margin-bottom: 10px;
+}
+
+.inline-empty {
+  padding: 16px;
+  border: 1px dashed #b8c1ce;
+  border-radius: 9px;
+  background: var(--surface-subtle);
+}
+
+.inline-empty p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.evidence-tag {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 7px;
+  border: 1px solid #c7cfda;
+  border-radius: 999px;
+  color: #344054;
+  background: #f6f8fa;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.evidence-tag--observed,
+.evidence-tag--user_confirmed,
+.evidence-tag--calculated {
+  border-color: #8ac9ae;
+  color: #075e43;
+  background: #ecfdf3;
+}
+
+.evidence-tag--estimated,
+.evidence-tag--partial {
+  border-color: #e8c281;
+  color: #704009;
+  background: #fff8e8;
+}
+
+.evidence-tag--recommended {
+  border-color: #aac3e8;
+  color: #174886;
+  background: #eff6ff;
+}
+
+.observed-price,
+.fee-evidence-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--surface-subtle);
+}
+
+.observed-price > div,
+.fee-evidence-strip > div {
+  display: grid;
+  gap: 3px;
+}
+
+.observed-price small,
+.fee-evidence-strip small {
+  color: var(--muted);
+}
+
+.economics-output-grid,
+.scenario-grid {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.economics-output,
+.scenario-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fcfdfe;
+}
+
+.economics-output h3,
+.scenario-card h3 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.economics-output strong {
+  font-size: 1.25rem;
+}
+
+.economics-output small {
+  color: var(--muted);
+}
+
+.fee-evidence-strip {
+  margin-top: 14px;
+}
+
+.trace-details {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.trace-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.trace-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.trace-list > div {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border-radius: 7px;
+  background: var(--surface-subtle);
+}
+
+.trace-list dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.trace-list dd {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.active-profile-summary {
+  margin-bottom: 12px;
+}
+
+.tier-editor {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.tier-editor legend {
+  padding: 0 5px;
+  color: #344054;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.tier-editor__rows {
+  display: grid;
+  gap: 10px;
+}
+
+.tier-editor__row {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.supplier-table {
+  min-width: 1050px;
+}
+
+.compact-list {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.decision-disclaimer {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid #174886;
+  color: #344054;
+  background: #eff6ff;
+  font-size: 0.82rem;
+}
+
+.scenario-form,
+.scenario-results,
+.scenario-empty {
+  margin-top: 14px;
+}
+
+.audit-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-list li {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border-radius: 7px;
+  background: var(--surface-subtle);
+}
+
+.audit-list span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 @media (min-width: 640px) {
   .content-container {
     padding: 24px 20px 60px;
@@ -1072,6 +1405,26 @@ tbody tr:hover {
   .score-grid,
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-planner-picker,
+  .planning-context {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
+    align-items: center;
+  }
+
+  .planning-context .button {
+    justify-self: end;
+  }
+
+  .economics-output-grid,
+  .scenario-grid,
+  .tier-editor__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tier-editor__row .button {
+    align-self: end;
   }
 
   .kpi-grid {
@@ -1180,6 +1533,18 @@ tbody tr:hover {
 
   .metric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .economics-output-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .scenario-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .trace-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

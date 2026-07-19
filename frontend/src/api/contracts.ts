@@ -435,3 +435,237 @@ export type ProductQuery = {
   page?: string;
   page_size?: string;
 };
+
+export type EvidenceLabel =
+  'observed' | 'calculated' | 'estimated' | 'recommended' | 'user_confirmed';
+
+export type SellingPriceTaxBasis = 'tax_inclusive' | 'tax_exclusive';
+
+export type CostInputs = {
+  purchase_cost: string;
+  gst_rate_percent: string;
+  gst_recoverable_percent: string;
+  freight_cost: string;
+  prep_cost: string;
+  packaging_cost: string;
+  advertising_rate_percent: string;
+  returns_rate_percent: string;
+  overhead_cost: string;
+  referral_fee_rate_percent: string | null;
+  fulfilment_fee: string | null;
+  closing_fee: string | null;
+  storage_fee: string | null;
+  minimum_margin_percent: string;
+  target_margin_percent: string;
+};
+
+export type CostProfile = CostInputs & {
+  id: string;
+  organisation_id: string;
+  marketplace_id: string;
+  product_id: string | null;
+  scope: 'product' | 'marketplace_default';
+  currency_code: string;
+  effective_from: string;
+  effective_to: string | null;
+  version: number;
+  supersedes_profile_id: string | null;
+  configuration_checksum: string;
+  fee_source: string | null;
+  fee_effective_at: string | null;
+  fee_status: 'observed' | 'estimated' | 'user_confirmed' | null;
+  created_at: string;
+  evidence_label: 'user_confirmed';
+  selling_price_tax_basis: SellingPriceTaxBasis | null;
+};
+
+export type CreateCostProfileRequest = CostInputs & {
+  product_id: string | null;
+  currency_code: string;
+  effective_from: string;
+  fee_source: string | null;
+  fee_effective_at: string | null;
+  fee_status: 'observed' | 'estimated' | 'user_confirmed' | null;
+  selling_price_tax_basis: SellingPriceTaxBasis;
+};
+
+export type UnitEconomics = {
+  formula_version: string;
+  configuration_checksum: string;
+  status: 'calculated' | 'partial';
+  decision_label: 'calculated';
+  selling_price_tax_basis: SellingPriceTaxBasis | null;
+  inputs: Record<string, string | null>;
+  formulas: Record<string, string>;
+  outputs: {
+    landed_cost: string;
+    net_revenue: string | null;
+    output_gst: string | null;
+    amazon_fees: string | null;
+    contribution_profit: string | null;
+    margin_percent: string | null;
+    roi_percent: string | null;
+    break_even_price: string | null;
+    minimum_acceptable_price: string | null;
+    target_price: string | null;
+  };
+  reason_codes: string[];
+  fee_evidence: {
+    status: 'observed' | 'estimated' | 'user_confirmed' | null;
+    source: string | null;
+    effective_at: string | null;
+  };
+};
+
+export type ProductEconomicsResponse = {
+  scope: PortfolioScope;
+  product: {
+    product_id: string;
+    asin: string;
+    title: string | null;
+  };
+  observed_price: {
+    amount: string;
+    currency_code: string;
+    evidence_label: 'observed';
+    source: 'keepa_import';
+    source_at: string;
+  } | null;
+  currency_code: string;
+  profile_source: 'product' | 'marketplace_default' | null;
+  active_profile: CostProfile | null;
+  profiles_by_scope: {
+    product: CostProfile | null;
+    marketplace_default: CostProfile | null;
+  };
+  profile_history: CostProfile[];
+  calculation: UnitEconomics | null;
+  notices: Array<{
+    code: string;
+    severity: 'missing' | 'warning';
+    message: string;
+    evidence_label: 'observed' | 'calculated' | 'estimated' | 'user_confirmed';
+  }>;
+  audit_history: Array<{
+    id: string;
+    event_type: string;
+    profile_id: string;
+    profile_version: number;
+    occurred_at: string;
+  }>;
+};
+
+export type SupplierPriceTier = {
+  minimum_quantity: number;
+  unit_cost: string;
+};
+
+export type SupplierOffer = {
+  id: string;
+  product_id: string;
+  supplier: {
+    id: string;
+    name: string;
+  };
+  currency_code: string;
+  minimum_order_quantity: number;
+  unit_cost: string;
+  lead_time_days: number;
+  quotation_date: string;
+  valid_until: string | null;
+  notes: string | null;
+  price_tiers: SupplierPriceTier[];
+  created_at: string;
+  evidence_label: 'user_confirmed';
+};
+
+export type SupplierOfferListResponse = {
+  scope: PortfolioScope;
+  product: {
+    product_id: string;
+    asin: string;
+    title: string | null;
+  };
+  items: SupplierOffer[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total_items: number;
+    total_pages: number;
+    has_previous: boolean;
+    has_next: boolean;
+  };
+  comparison_dimensions: Array<'unit_cost' | 'minimum_order_quantity' | 'lead_time_days'>;
+  selection_note: string;
+};
+
+export type CreateSupplierOfferRequest = {
+  product_id: string;
+  supplier_name: string;
+  currency_code: string;
+  minimum_order_quantity: number;
+  unit_cost: string;
+  lead_time_days: number;
+  quotation_date: string;
+  valid_until: string | null;
+  notes: string | null;
+  price_tiers: SupplierPriceTier[];
+};
+
+export type TestBuyScenarioName = 'conservative' | 'expected' | 'aggressive';
+
+export type TestBuyScenario = {
+  scenario: TestBuyScenarioName;
+  quantity: number;
+  unit_cost: string | null;
+  required_investment: string;
+  expected_sell_through_days: string | null;
+  status: 'recommended' | 'blocked';
+  reason_codes: string[];
+};
+
+export type TestBuyRecommendation = {
+  id: string;
+  scope: PortfolioScope;
+  product: {
+    product_id: string;
+    asin: string;
+    title: string | null;
+  };
+  formula_version: string;
+  configuration_checksum: string;
+  created_at: string;
+  advisory_only: true;
+  outcome: 'recommended' | 'blocked';
+  decision_label: 'recommended' | null;
+  supplier_offer_id: string;
+  budget_amount: string;
+  budget_currency_code: string;
+  inputs: Record<string, string | number | null>;
+  evidence: {
+    source_snapshot_id: string | null;
+    monthly_demand_units: number | null;
+    monthly_demand_label: 'estimated' | null;
+    monthly_demand_source: 'keepa_monthly_sold' | null;
+    market_snapshot_at: string | null;
+    data_confidence_score_result_id: string | null;
+    data_confidence_score: number | null;
+    data_confidence_label: 'calculated' | null;
+    data_confidence_formula_version: string | null;
+    supplier_offer_label: 'user_confirmed';
+    budget_label: 'user_confirmed';
+  };
+  scenarios: TestBuyScenario[];
+  notices: Array<{
+    code: string;
+    severity: 'missing' | 'warning';
+    message: string;
+    evidence_label: 'estimated' | 'calculated' | 'recommended' | 'user_confirmed';
+  }>;
+};
+
+export type CreateTestBuyRequest = {
+  supplier_offer_id: string;
+  budget_amount: string;
+  budget_currency_code: string;
+};

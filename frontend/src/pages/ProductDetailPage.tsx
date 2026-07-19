@@ -66,16 +66,21 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         title={product.title ?? 'Untitled product'}
         description={product.category || 'Uncategorised product'}
         action={
-          product.amazon_url ? (
-            <a
-              className="button button--secondary"
-              href={product.amazon_url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View Amazon listing
-            </a>
-          ) : undefined
+          <div className="page-actions">
+            <Link className="button" to={`/planning?product_id=${encodeURIComponent(productId)}`}>
+              Plan costs and sourcing
+            </Link>
+            {product.amazon_url && (
+              <a
+                className="button button--secondary"
+                href={product.amazon_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View Amazon listing
+              </a>
+            )}
+          </div>
         }
       />
 

@@ -1,4 +1,7 @@
-# Codex Start Prompt — SellerOS Foundation Sprint
+# Historical Codex Start Prompt — SellerOS Phase 0
+
+> **Archived:** Phase 0 is complete. This file is retained as implementation history and must not be
+> treated as the current task. AI agents must begin with `AGENTS.md` and `docs/STATUS.md`.
 
 Copy the prompt below into Codex while the repository `DataScience-beginner/Amazon-seller-analytics-platform` is selected.
 

@@ -1,3 +1,10 @@
+"""Legacy prototype reference only.
+
+Do not run, import or extend this module. The supported application is the modular backend under
+``backend/app`` and the React frontend under ``frontend/src``. This file remains only to document
+prototype behaviour that informed the migrated implementation.
+"""
+
 from __future__ import annotations
 
 import json

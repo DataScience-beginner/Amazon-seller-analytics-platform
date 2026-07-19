@@ -1,6 +1,6 @@
 # SellerOS Delivery Status
 
-Last verified implementation target: Phase 1, stories SOS-101 through SOS-303.
+Last verified implementation target: Phase 2, stories SOS-401 through SOS-502.
 
 | Story | Status | Implemented evidence |
 | --- | --- | --- |
@@ -14,6 +14,10 @@ Last verified implementation target: Phase 1, stories SOS-101 through SOS-303.
 | SOS-301 | Complete | Tenant-scoped KPI dashboard, opportunities, risks, quality and first-use state |
 | SOS-302 | Complete | Server search/filter/sort/pagination with URL-preserved frontend filters |
 | SOS-303 | Complete | Product metrics, score reasons, recommendation evidence and 24-snapshot history |
+| SOS-401 | Complete | Append-only product/default cost revisions, explicit GST basis, fee provenance and audit history |
+| SOS-402 | Complete | Versioned Decimal v2 economics with net-revenue/output-GST trace, eight required metrics and fail-closed partial states |
+| SOS-501 | Complete | Immutable scoped quotations with supplier-name evidence, MOQ/lead time/validity and sealed price tiers |
+| SOS-502 | Complete | Three persisted advisory scenarios with source IDs, evidence, aggregate outcome and demand/confidence/lead-time/budget gates |
 
 “Complete” means implemented against the repository acceptance criteria with synthetic automated
 coverage. It does not mean production SaaS readiness.
@@ -32,7 +36,9 @@ delivery report.
 
 ## Next authorised phase
 
-Phase 2 begins at SOS-401 (editable cost profiles and unit economics). Before public release, identity
-and tenant authorisation must also be scheduled. Phase 2 must not retrofit profitability claims into
-historical import-only recommendations; it must create new versioned outputs from explicit seller
-inputs.
+Phase 3 begins at SOS-601 (inventory positions, stock cover, reorder and lifecycle/pricing plans).
+Before public release, identity and tenant authorisation must also be scheduled. Phase 3 must use
+new seller-confirmed inventory evidence and must not reinterpret historical import, cost or sourcing
+outputs in place. Production import hardening must move confirmation to a memory-bounded background
+job; the current request-process importer bounds flush size but retains the full atomic workbook unit
+of work in memory.

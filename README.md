@@ -1,12 +1,12 @@
 # SellerOS — Amazon Seller Analytics Platform
 
-SellerOS is a SaaS-oriented Amazon seller operating system. The Phase 1 vertical slice converts dynamic
-Keepa `.xlsx` exports into immutable product history, explainable market scores, advisory strategy
-recommendations and a responsive portfolio experience.
+SellerOS is a SaaS-oriented Amazon seller operating system. The Phase 2 vertical slice converts dynamic
+Keepa `.xlsx` exports and explicit seller-owned cost/supplier inputs into immutable product history,
+explainable market scores, traceable unit economics and advisory sourcing scenarios.
 
 ## What works now
 
-Phase 1 implements backlog stories SOS-101 through SOS-303:
+Phase 1 stories SOS-101 through SOS-303 and Phase 2 stories SOS-401 through SOS-502 are implemented:
 
 - safe `.xlsx` staging, workbook inspection and preview;
 - versioned alias mapping with explicit ambiguity handling;
@@ -15,11 +15,19 @@ Phase 1 implements backlog stories SOS-101 through SOS-303:
 - deterministic Demand, Competition, Price Stability, Data Confidence and Overall Opportunity scores;
 - deterministic, versioned strategy recommendations with structured evidence;
 - tenant-scoped dashboard, server-filtered product portfolio and product evidence/history pages;
-- responsive first-use workspace setup and import workflow.
+- responsive first-use workspace setup and import workflow;
+- effective-dated product and marketplace-default cost-profile revisions with audit history;
+- explicit GST-inclusive/exclusive selling-price basis with Decimal-only net revenue, output GST,
+  landed cost, Amazon fees, contribution, margin, ROI and price thresholds;
+- explicit fee source/date/status and formula/input/configuration trace;
+- immutable supplier quotations with supplier-name-at-quote, MOQ, lead time, validity and
+  quantity-price tiers;
+- persisted conservative, expected and aggressive test-buy scenarios with source evidence,
+  confidence, budget, supplier constraints and an honest Recommended/Blocked aggregate outcome.
 
-Seller costs, profitability, sourcing, inventory planning, authentication, billing, Keepa API,
-Amazon SP-API and AI execution remain later-phase work. The system is AI-readable and auditable, but
-its calculations do not depend on AI.
+Inventory/reorder planning, lifecycle pricing, cash-flow forecasting, authentication, billing,
+Keepa API, Amazon SP-API and AI execution remain later-phase work. SellerOS calculations are
+deterministic and AI-readable; AI does not set assumptions or execute purchasing actions.
 
 ## Prerequisites
 
@@ -55,8 +63,9 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. On first use, create a local organisation/marketplace, open Imports,
-upload a Keepa `.xlsx`, review the detected mapping, then confirm it. Local uploads and databases are
-ignored by Git. Never commit seller workbooks or imported business data.
+upload a Keepa `.xlsx`, review the detected mapping, then confirm it. Open Planning from a product to
+enter costs, compare supplier quotations and request advisory test-buy scenarios. Local uploads,
+databases and workbooks are ignored by Git. Never commit seller workbooks or imported business data.
 
 Health and interactive API documentation:
 
@@ -76,9 +85,14 @@ Health and interactive API documentation:
 | `GET` | `/api/v1/dashboard` | Tenant-scoped executive portfolio |
 | `GET` | `/api/v1/products` | Search, filter, sort and paginate products |
 | `GET` | `/api/v1/products/{id}` | Latest evidence plus snapshot/strategy history |
+| `POST` | `/api/v1/cost-profiles` | Create a seller-owned effective-dated cost revision |
+| `GET` | `/api/v1/products/{id}/economics` | Read traced costs and unit economics |
+| `GET` | `/api/v1/products/{id}/supplier-offers` | List bounded supplier quotations |
+| `POST` | `/api/v1/supplier-offers` | Record an immutable quotation and price tiers |
+| `POST` | `/api/v1/products/{id}/test-buy-scenarios` | Persist three advisory sourcing scenarios |
 
-Import-history, import-detail/action and portfolio endpoints require explicit `organisation_id` and
-`marketplace_id` scope.
+Import-history, import-detail/action, portfolio, economics and sourcing endpoints require explicit
+`organisation_id` and `marketplace_id` scope.
 Authentication is intentionally not implemented yet, so this build must not be exposed publicly.
 
 ## Configuration
@@ -140,6 +154,7 @@ Always inspect generated SQL and run the upgrade/downgrade test before committin
 - [Current implementation status](docs/STATUS.md)
 - [Architecture and invariants](docs/ARCHITECTURE.md)
 - [Phase 1 API and decision contracts](docs/PHASE1_CONTRACTS.md)
+- [Phase 2 economics and sourcing contracts](docs/PHASE2_CONTRACTS.md)
 - [Product backlog](docs/IMPLEMENTATION_BACKLOG.md)
 - [Engineering guardrails](docs/ENGINEERING_GUARDRAILS.md)
 - [Competitive reference research](docs/competitive/README.md)

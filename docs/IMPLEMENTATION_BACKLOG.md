@@ -238,8 +238,11 @@ evidence can responsibly support.
 - The dashboard shows bounded, tenant-scoped product, category, subcategory and brand counts.
 - Coverage is charted for price, rank, rank history, seller offers, reviews, brand and monthly demand.
 - Category or subcategory distribution and brand concentration precede individual product rankings.
+- Selling-price bands show product count and percentage for the whole dataset and selected category,
+  including a separate unavailable-price band.
 - Selecting a category loads its scoped subcategory, brand and coverage charts plus a bounded ranked
   product table without replacing the whole-dataset context.
+- A single-category dataset keeps its root category actionable and opens that category automatically.
 - Estimated revenue is hidden unless at least 70% of products have both monthly demand and price
   evidence in one currency.
 - Conclusions clearly distinguish relative product research from revenue-ready evidence.

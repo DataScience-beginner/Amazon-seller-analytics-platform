@@ -16,7 +16,7 @@ decision-first SOS-304 product-research refinement.
 | SOS-302 | Complete | Server search/filter/sort/pagination with URL-preserved frontend filters |
 | SOS-303 | Complete | Product metrics, score reasons, recommendation evidence and 24-snapshot history |
 | SOS-304 | Complete | Versioned research screens, brand-evidence classification, critical metrics, explainable shortlist and current-page charts |
-| SOS-305 | Complete | Dataset readiness, evidence coverage, category/subcategory and brand concentration charts, clickable category drill-down and fail-closed revenue |
+| SOS-305 | Complete | Dataset readiness, evidence coverage, category/subcategory, brand and selling-price distribution charts, single-category navigation and fail-closed revenue |
 | SOS-306 | Complete | Tabbed subcategory Keepa table and versioned configurable reverse target-sourcing-cost estimator |
 | SOS-307 | Complete | Explicit completed-import selector propagated through overview, category, products and sourcing estimates |
 | SOS-401 | Complete | Append-only product/default cost revisions, explicit GST basis, fee provenance and audit history |

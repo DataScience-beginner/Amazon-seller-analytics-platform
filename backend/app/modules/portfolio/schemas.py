@@ -377,10 +377,12 @@ class DatasetOverviewResponse(BaseModel):
     estimated_monthly_units: int | None
     estimated_monthly_revenue: Decimal | None
     currency_code: str | None
+    price_range_currency_code: str | None
     coverage: list[EvidenceCoverageResponse]
     top_categories: list[DatasetDistributionResponse]
     top_subcategories: list[DatasetDistributionResponse]
     top_brands: list[DatasetDistributionResponse]
+    price_ranges: list[DatasetDistributionResponse]
     conclusion_codes: list[str]
 
 

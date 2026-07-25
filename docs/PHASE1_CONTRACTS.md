@@ -111,6 +111,11 @@ returned only when at least 70% of products have both a Keepa bought-in-past-mon
 current Buy Box price, and all contributing rows use one currency. Below that threshold the response
 is `relative_research_only` and revenue fields remain null.
 
+The overview also returns deterministic current Buy Box bands: under 500, 500–999, 1,000–1,999,
+2,000–4,999, 5,000 and above, plus price unavailable. Percentages use all products in scope as the
+denominator, and the currency label is returned only when all populated prices share one currency.
+These are selling-price distributions, not sourcing-price recommendations.
+
 `GET /api/v1/dashboard/dataset-overview` accepts the same required scope plus an optional exact
 `category`. It returns the same aggregate contract for the selected category. The dashboard uses
 this endpoint together with the bounded product collection endpoint to render a category drill-down;

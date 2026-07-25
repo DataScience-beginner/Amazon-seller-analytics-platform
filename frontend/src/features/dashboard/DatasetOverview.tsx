@@ -321,6 +321,10 @@ function CategoryDeepDive({
           selected={activeSubcategory}
         />
         <DistributionChart title={`${category} brands`} items={overview.top_brands} />
+        <DistributionChart
+          title={`Selling price ranges${overview.price_range_currency_code ? ` (${overview.price_range_currency_code})` : ''}`}
+          items={overview.price_ranges}
+        />
         <section className="dataset-chart" aria-label={`${category} evidence coverage`}>
           <h3>Category evidence coverage</h3>
           <div className="coverage-bars">
@@ -366,10 +370,11 @@ export function DatasetOverview({
   marketplaceId: string;
   importBatchId?: string;
 }) {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(
+    overview.category_count === 1 ? (overview.top_categories[0]?.label ?? null) : null,
+  );
   const revenueReady = overview.readiness === 'revenue_ready';
-  const distribution =
-    overview.category_count === 1 ? overview.top_subcategories : overview.top_categories;
+  const distribution = overview.top_categories;
 
   return (
     <section className="dataset-overview" aria-labelledby="dataset-overview-heading">
@@ -436,12 +441,16 @@ export function DatasetOverview({
           </div>
         </section>
         <DistributionChart
-          title={overview.category_count === 1 ? 'Largest subcategories' : 'Largest categories'}
+          title="Largest categories"
           items={distribution}
-          onSelect={overview.category_count === 1 ? undefined : setSelectedCategory}
+          onSelect={setSelectedCategory}
           selected={selectedCategory}
         />
         <DistributionChart title="Brand concentration" items={overview.top_brands} />
+        <DistributionChart
+          title={`Selling price ranges${overview.price_range_currency_code ? ` (${overview.price_range_currency_code})` : ''}`}
+          items={overview.price_ranges}
+        />
       </div>
 
       <div className="dataset-conclusion">

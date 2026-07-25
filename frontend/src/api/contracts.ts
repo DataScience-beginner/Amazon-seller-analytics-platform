@@ -476,6 +476,7 @@ export type DatasetOverview = {
   estimated_monthly_units: number | null;
   estimated_monthly_revenue: number | string | null;
   currency_code: string | null;
+  price_range_currency_code: string | null;
   coverage: Array<{
     id: string;
     label: string;
@@ -486,6 +487,7 @@ export type DatasetOverview = {
   top_categories: Array<DatasetDistribution>;
   top_subcategories: Array<DatasetDistribution>;
   top_brands: Array<DatasetDistribution>;
+  price_ranges: Array<DatasetDistribution>;
   conclusion_codes: string[];
 };
 

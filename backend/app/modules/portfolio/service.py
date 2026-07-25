@@ -503,6 +503,8 @@ def _dataset_overview(rows: list[DatasetEvidenceRow]) -> DatasetOverviewResponse
     known_revenue = Decimal("0")
     revenue_products = 0
     currencies: set[str] = set()
+    price_currencies: set[str] = set()
+    price_ranges: Counter[str] = Counter()
 
     for row in rows:
         snapshot = row.snapshot
@@ -525,6 +527,12 @@ def _dataset_overview(rows: list[DatasetEvidenceRow]) -> DatasetOverviewResponse
             if value is not None and (not isinstance(value, str) or value.strip()):
                 coverage_counts[key] += 1
         monthly_bought = _estimated_monthly_bought(snapshot)
+        if snapshot.buy_box_price is None:
+            price_ranges["Price unavailable"] += 1
+        else:
+            price_ranges[_price_range_label(snapshot.buy_box_price)] += 1
+            if snapshot.currency_code:
+                price_currencies.add(snapshot.currency_code)
         if monthly_bought is not None:
             coverage_counts["monthly_demand"] += 1
             estimated_units += monthly_bought
@@ -589,6 +597,9 @@ def _dataset_overview(rows: list[DatasetEvidenceRow]) -> DatasetOverviewResponse
         estimated_monthly_units=estimated_units if revenue_ready else None,
         estimated_monthly_revenue=known_revenue if revenue_ready else None,
         currency_code=next(iter(currencies)) if revenue_ready else None,
+        price_range_currency_code=(
+            next(iter(price_currencies)) if len(price_currencies) == 1 else None
+        ),
         coverage=[
             EvidenceCoverageResponse(
                 id=key,
@@ -602,6 +613,7 @@ def _dataset_overview(rows: list[DatasetEvidenceRow]) -> DatasetOverviewResponse
         top_categories=_distribution(categories, total),
         top_subcategories=_distribution(subcategories, total),
         top_brands=_distribution(brands, total),
+        price_ranges=_ordered_price_distribution(price_ranges, total),
         conclusion_codes=conclusions,
     )
 
@@ -620,6 +632,40 @@ def _distribution(values: Counter[str], total: int) -> list[DatasetDistributionR
             product_percentage=_percentage(count, total),
         )
         for label, count in values.most_common(10)
+    ]
+
+
+def _price_range_label(price: Decimal) -> str:
+    if price < Decimal("500"):
+        return "Under 500"
+    if price < Decimal("1000"):
+        return "500–999"
+    if price < Decimal("2000"):
+        return "1,000–1,999"
+    if price < Decimal("5000"):
+        return "2,000–4,999"
+    return "5,000 and above"
+
+
+def _ordered_price_distribution(
+    values: Counter[str], total: int
+) -> list[DatasetDistributionResponse]:
+    order = (
+        "Under 500",
+        "500–999",
+        "1,000–1,999",
+        "2,000–4,999",
+        "5,000 and above",
+        "Price unavailable",
+    )
+    return [
+        DatasetDistributionResponse(
+            label=label,
+            product_count=values[label],
+            product_percentage=_percentage(values[label], total),
+        )
+        for label in order
+        if values[label] > 0
     ]
 
 

@@ -14,7 +14,7 @@ describe('DatasetOverview', () => {
           readiness_title: 'Ready for relative product research',
           readiness_message: 'Rank and price evidence are usable.',
           product_count: 549,
-          category_count: 1,
+          category_count: 2,
           subcategory_count: 147,
           brand_count: 227,
           monthly_demand_coverage_percentage: '0.2',
@@ -22,6 +22,7 @@ describe('DatasetOverview', () => {
           estimated_monthly_units: null,
           estimated_monthly_revenue: null,
           currency_code: null,
+          price_range_currency_code: 'INR',
           coverage: [
             {
               id: 'buy_box_price',
@@ -44,6 +45,11 @@ describe('DatasetOverview', () => {
               product_count: 549,
               product_percentage: '100.0',
             },
+            {
+              label: 'Baby',
+              product_count: 10,
+              product_percentage: '1.8',
+            },
           ],
           top_subcategories: [
             {
@@ -59,10 +65,10 @@ describe('DatasetOverview', () => {
               product_percentage: '12.9',
             },
           ],
+          price_ranges: [{ label: '500–999', product_count: 300, product_percentage: '54.6' }],
           conclusion_codes: [
             'revenue_blocked_low_monthly_demand',
             'brand_concentration_requires_review',
-            'single_root_category_dataset',
           ],
         }}
       />,
@@ -72,8 +78,9 @@ describe('DatasetOverview', () => {
       screen.getByRole('heading', { name: 'Ready for relative product research' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Not responsible to calculate')).toBeInTheDocument();
-    expect(screen.getByLabelText('Largest subcategories')).toHaveTextContent('Cars & Race Cars');
+    expect(screen.getByLabelText('Largest categories')).toHaveTextContent('Toys & Games');
     expect(screen.getByLabelText('Brand concentration')).toHaveTextContent('Hot Wheels');
+    expect(screen.getByLabelText('Selling price ranges (INR)')).toHaveTextContent('500–999');
     expect(screen.getByText(/Revenue remains hidden until at least 70%/)).toBeInTheDocument();
   });
 
@@ -91,12 +98,14 @@ describe('DatasetOverview', () => {
       estimated_monthly_units: null,
       estimated_monthly_revenue: null,
       currency_code: null,
+      price_range_currency_code: 'INR',
       coverage: [],
       top_categories: [{ label: 'Toys & Games', product_count: 67, product_percentage: '100.0' }],
       top_subcategories: [
         { label: 'Cars & Race Cars', product_count: 40, product_percentage: '59.7' },
       ],
       top_brands: [{ label: 'Hot Wheels', product_count: 20, product_percentage: '29.9' }],
+      price_ranges: [{ label: '500–999', product_count: 40, product_percentage: '59.7' }],
       conclusion_codes: ['revenue_blocked_low_monthly_demand'],
     };
     vi.stubGlobal(

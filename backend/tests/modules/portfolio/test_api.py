@@ -398,6 +398,10 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
     assert overview["monthly_demand_coverage_percentage"] == "50.0"
     assert overview["estimated_monthly_revenue"] is None
     assert overview["top_categories"][0]["label"] == "Toys & Games"
+    assert overview["price_range_currency_code"] == "INR"
+    assert overview["price_ranges"] == [
+        {"label": "500\u2013999", "product_count": 2, "product_percentage": "100.0"}
+    ]
     assert "revenue_blocked_low_monthly_demand" in overview["conclusion_codes"]
     assert category_response.status_code == 200
     assert category_response.json()["product_count"] == 2

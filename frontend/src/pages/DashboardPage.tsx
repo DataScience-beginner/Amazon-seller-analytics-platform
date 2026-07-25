@@ -70,6 +70,7 @@ function DashboardDatasetSection({
       )}
       {overview.status === 'success' && (
         <DatasetOverview
+          key={importBatchId || 'combined'}
           overview={overview.data}
           organisationId={organisationId}
           marketplaceId={marketplaceId}

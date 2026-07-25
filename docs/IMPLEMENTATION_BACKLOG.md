@@ -228,6 +228,21 @@ supplier and profitability research without being overwhelmed by raw Keepa colum
 - Filters and screen selection remain in the URL, results stay server-paginated and charts identify
   when they represent only the current page.
 
+#### SOS-305 — Explain dataset readiness before product decisions
+
+**As a seller,** I want a broad explanation of each imported dataset so I know what conclusions its
+evidence can responsibly support.
+
+**Acceptance criteria**
+
+- The dashboard shows bounded, tenant-scoped product, category, subcategory and brand counts.
+- Coverage is charted for price, rank, rank history, seller offers, reviews, brand and monthly demand.
+- Category or subcategory distribution and brand concentration precede individual product rankings.
+- Estimated revenue is hidden unless at least 70% of products have both monthly demand and price
+  evidence in one currency.
+- Conclusions clearly distinguish relative product research from revenue-ready evidence.
+- Single-category and material brand-concentration datasets receive explicit notices.
+
 ## Phase 2 — Unit economics and sourcing
 
 ### Epic E4: Profitability engine

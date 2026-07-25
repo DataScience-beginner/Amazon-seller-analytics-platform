@@ -275,6 +275,72 @@ def test_research_screens_brand_filter_and_critical_metrics(db_session: Session)
     assert generic.json()["items"][0]["research"]["brand_classification"] == "likely_generic"
 
 
+def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
+    db_session: Session,
+) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-overview",
+        marketplace_id="marketplace-overview",
+        code="IN",
+    )
+    first = _add_product(
+        db_session,
+        product_id="overview-1",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000OVER01",
+        title="Synthetic race car",
+        brand="Popular Brand",
+        category="Toys & Games",
+        price="500.00",
+        offers=2,
+        overall_score=80,
+        confidence=90,
+        strategy="test_buy",
+        monthly_bought=100,
+    )
+    second = _add_product(
+        db_session,
+        product_id="overview-2",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000OVER02",
+        title="Synthetic doll",
+        brand="Popular Brand",
+        category="Toys & Games",
+        price="750.00",
+        offers=3,
+        overall_score=75,
+        confidence=90,
+        strategy="test_buy",
+        monthly_bought=None,
+    )
+    first.subcategory = "Cars & Race Cars"
+    second.subcategory = "Dolls"
+    db_session.commit()
+
+    with _api_client(db_session) as client:
+        response = client.get(
+            "/api/v1/dashboard",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+            },
+        )
+
+    assert response.status_code == 200
+    overview = response.json()["dataset_overview"]
+    assert overview["readiness"] == "relative_research_only"
+    assert overview["product_count"] == 2
+    assert overview["category_count"] == 1
+    assert overview["subcategory_count"] == 2
+    assert overview["monthly_demand_coverage_percentage"] == "50.0"
+    assert overview["estimated_monthly_revenue"] is None
+    assert overview["top_categories"][0]["label"] == "Toys & Games"
+    assert "revenue_blocked_low_monthly_demand" in overview["conclusion_codes"]
+
+
 def test_legacy_undated_evidence_is_browsable_but_excluded_from_current_decisions(
     db_session: Session,
 ) -> None:

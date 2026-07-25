@@ -16,6 +16,7 @@ decision-first SOS-304 product-research refinement.
 | SOS-302 | Complete | Server search/filter/sort/pagination with URL-preserved frontend filters |
 | SOS-303 | Complete | Product metrics, score reasons, recommendation evidence and 24-snapshot history |
 | SOS-304 | Complete | Versioned research screens, brand-evidence classification, critical metrics, explainable shortlist and current-page charts |
+| SOS-305 | Complete | Dataset readiness, evidence coverage, category/subcategory and brand concentration charts with fail-closed revenue |
 | SOS-401 | Complete | Append-only product/default cost revisions, explicit GST basis, fee provenance and audit history |
 | SOS-402 | Complete | Versioned Decimal v2 economics with net-revenue/output-GST trace, eight required metrics and fail-closed partial states |
 | SOS-501 | Complete | Immutable scoped quotations with supplier-name evidence, MOQ/lead time/validity and sealed price tiers |

@@ -104,6 +104,13 @@ the exact preserved Keepa header `Monthly Sales Trends: Bought in past month`, r
 Estimated, and is never substituted when absent. `offer_count` means current listing offers; it is
 not a count of substitute products or a claim about total market competitors.
 
+`GET /api/v1/dashboard` includes a `dataset_overview` derived from at most 10,000 latest confirmed
+product snapshots in the requested organisation and marketplace. It reports evidence coverage,
+category/subcategory distribution, brand concentration and structured conclusion codes. Revenue is
+returned only when at least 70% of products have both a Keepa bought-in-past-month estimate and
+current Buy Box price, and all contributing rows use one currency. Below that threshold the response
+is `relative_research_only` and revenue fields remain null.
+
 ## Score semantics
 
 All scores are integer 0–100, where higher is favourable:

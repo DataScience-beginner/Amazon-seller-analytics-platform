@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/Feedback';
 import { PageHeader } from '../components/PageHeader';
 import { ProductSummaryRow } from '../components/ProductSummaryRow';
 import { StatusBadge } from '../components/StatusBadge';
+import { DatasetOverview } from '../features/dashboard/DatasetOverview';
 import { useAsync } from '../hooks/useAsync';
 import { formatDate, formatMonth, formatNumber, humanize } from '../utils/format';
 
@@ -50,6 +51,9 @@ export function DashboardPage() {
       )}
       {state.status === 'success' && state.data.kpis.tracked_products > 0 && (
         <div className="dashboard-stack">
+          {state.data.dataset_overview && (
+            <DatasetOverview overview={state.data.dataset_overview} />
+          )}
           <section className="kpi-grid" aria-label="Portfolio key performance indicators">
             <article className="kpi-card">
               <span>Tracked products</span>

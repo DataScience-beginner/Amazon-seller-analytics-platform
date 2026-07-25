@@ -463,6 +463,38 @@ export type DataQualityAlert = {
   severity?: 'info' | 'warning' | 'critical' | string;
 };
 
+export type DatasetOverview = {
+  readiness: 'revenue_ready' | 'relative_research_only' | 'insufficient_evidence';
+  readiness_title: string;
+  readiness_message: string;
+  product_count: number;
+  category_count: number;
+  subcategory_count: number;
+  brand_count: number;
+  monthly_demand_coverage_percentage: number | string;
+  revenue_coverage_percentage: number | string;
+  estimated_monthly_units: number | null;
+  estimated_monthly_revenue: number | string | null;
+  currency_code: string | null;
+  coverage: Array<{
+    id: string;
+    label: string;
+    populated_products: number;
+    total_products: number;
+    coverage_percentage: number | string;
+  }>;
+  top_categories: Array<DatasetDistribution>;
+  top_subcategories: Array<DatasetDistribution>;
+  top_brands: Array<DatasetDistribution>;
+  conclusion_codes: string[];
+};
+
+export type DatasetDistribution = {
+  label: string;
+  product_count: number;
+  product_percentage: number | string;
+};
+
 export type DashboardResponse = {
   kpis: DashboardKpis;
   latest_import?: LatestImportSummary | null;
@@ -470,6 +502,7 @@ export type DashboardResponse = {
   data_quality_alerts?: DataQualityAlert[];
   top_opportunities: ProductSummary[];
   top_risks: ProductSummary[];
+  dataset_overview?: DatasetOverview | null;
   definitions?: Record<string, string>;
 };
 
@@ -511,6 +544,7 @@ export type DashboardApiResponse = {
     product: ProductListItemResponse;
     reason_codes: string[];
   }>;
+  dataset_overview: DatasetOverview | null;
   empty_state: {
     code: 'upload_required';
     title: string;

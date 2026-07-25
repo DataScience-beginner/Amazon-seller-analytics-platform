@@ -257,6 +257,7 @@ export function normalizeDashboard(response: DashboardApiResponse): DashboardRes
       if (product.recommendation) product.recommendation.reason_codes = risk.reason_codes;
       return product;
     }),
+    dataset_overview: response.dataset_overview,
     definitions: Object.fromEntries(response.kpis.map((item) => [item.id, item.definition])),
   };
 }

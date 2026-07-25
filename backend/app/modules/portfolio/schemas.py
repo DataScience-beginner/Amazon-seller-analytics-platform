@@ -341,6 +341,40 @@ class EmptyDashboardResponse(BaseModel):
     primary_action: Literal["open_imports"] = "open_imports"
 
 
+class EvidenceCoverageResponse(BaseModel):
+    id: str
+    label: str
+    populated_products: int
+    total_products: int
+    coverage_percentage: Decimal
+
+
+class DatasetDistributionResponse(BaseModel):
+    label: str
+    product_count: int
+    product_percentage: Decimal
+
+
+class DatasetOverviewResponse(BaseModel):
+    readiness: Literal["revenue_ready", "relative_research_only", "insufficient_evidence"]
+    readiness_title: str
+    readiness_message: str
+    product_count: int
+    category_count: int
+    subcategory_count: int
+    brand_count: int
+    monthly_demand_coverage_percentage: Decimal
+    revenue_coverage_percentage: Decimal
+    estimated_monthly_units: int | None
+    estimated_monthly_revenue: Decimal | None
+    currency_code: str | None
+    coverage: list[EvidenceCoverageResponse]
+    top_categories: list[DatasetDistributionResponse]
+    top_subcategories: list[DatasetDistributionResponse]
+    top_brands: list[DatasetDistributionResponse]
+    conclusion_codes: list[str]
+
+
 class DashboardResponse(BaseModel):
     scope: ScopeResponse
     tracked_product_count: int
@@ -350,6 +384,7 @@ class DashboardResponse(BaseModel):
     data_quality_alerts: list[DataQualityAlertResponse]
     top_opportunities: list[ProductSummaryResponse]
     top_risks: list[DashboardRiskResponse]
+    dataset_overview: DatasetOverviewResponse | None
     empty_state: EmptyDashboardResponse | None
 
 

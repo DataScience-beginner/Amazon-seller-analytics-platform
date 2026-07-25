@@ -138,6 +138,11 @@ Brand values classify evidence only; they never prove trademark, category or res
 The strongest result is `priority_research`, not `buy`. Supplier cost, Amazon fees, availability and
 permission remain explicit downstream gates.
 
+The portfolio dashboard performs a bounded aggregate over latest confirmed snapshots before showing
+product recommendations. Evidence coverage and distributions are calculated within organisation and
+marketplace scope. A fail-closed 70% monthly-demand-and-price threshold prevents partial Keepa
+coverage from being presented as category revenue.
+
 Every UI decision uses Observed, Calculated, Estimated, Recommended or User confirmed labels.
 Recommendations are advisory; Phase 2 never purchases, reorders, reprices or marks down inventory.
 

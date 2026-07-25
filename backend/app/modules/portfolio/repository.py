@@ -91,6 +91,14 @@ class DataQualityCounts:
 
 
 @dataclass(frozen=True, slots=True)
+class DatasetEvidenceRow:
+    category: str | None
+    subcategory: str | None
+    brand: str | None
+    snapshot: ProductSnapshot
+
+
+@dataclass(frozen=True, slots=True)
 class _ProjectionBundle:
     statement: Select[Any]
     snapshot: Any
@@ -417,6 +425,42 @@ class PortfolioRepository:
             missing_recommendation=int(row[3] or 0),
             unconfirmed_observation_date=int(row[4] or 0),
         )
+
+    def dataset_evidence_rows(
+        self, scope: PortfolioScope, *, limit: int = 10_001
+    ) -> list[DatasetEvidenceRow]:
+        """Return a bounded evidence projection for in-process aggregate calculations."""
+        rows = self._session.execute(
+            select(
+                Product.category,
+                Product.subcategory,
+                Product.brand,
+                ProductSnapshot,
+            )
+            .join(
+                ProductSnapshot,
+                and_(
+                    ProductSnapshot.id == Product.latest_snapshot_id,
+                    ProductSnapshot.product_id == Product.id,
+                ),
+            )
+            .where(
+                Product.organisation_id == scope.organisation_id,
+                Product.marketplace_id == scope.marketplace_id,
+                ProductSnapshot.observed_on.is_not(None),
+            )
+            .order_by(Product.id)
+            .limit(limit)
+        ).all()
+        return [
+            DatasetEvidenceRow(
+                category=row[0],
+                subcategory=row[1],
+                brand=row[2],
+                snapshot=row[3],
+            )
+            for row in rows
+        ]
 
     def _build_product_projection(self, scope: PortfolioScope) -> _ProjectionBundle:
         snapshot = aliased(ProductSnapshot, name="latest_snapshot")

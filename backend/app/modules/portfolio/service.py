@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections import Counter
 from decimal import Decimal
 from math import isfinite
+from typing import Literal
 from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
@@ -15,6 +17,7 @@ from app.models.domain import (
 from app.modules.portfolio.repository import (
     DashboardCounts,
     DataQualityCounts,
+    DatasetEvidenceRow,
     PortfolioRepository,
     PortfolioScope,
     ProductQuerySpec,
@@ -27,7 +30,10 @@ from app.modules.portfolio.schemas import (
     DashboardRiskResponse,
     DataNoticeResponse,
     DataQualityAlertResponse,
+    DatasetDistributionResponse,
+    DatasetOverviewResponse,
     EmptyDashboardResponse,
+    EvidenceCoverageResponse,
     LatestImportResponse,
     MarketMetricsResponse,
     PaginationResponse,
@@ -298,6 +304,7 @@ class PortfolioService:
             scope, confidence_threshold=self._confidence_threshold
         )
         quality_counts = self._repository.data_quality_counts(scope)
+        dataset_rows = self._repository.dataset_evidence_rows(scope)
         latest_import = self._repository.latest_import(scope)
         distribution = self._repository.strategy_distribution(scope)
         opportunity_page = self._repository.list_products(
@@ -351,6 +358,7 @@ class PortfolioService:
                 )
                 for record in risk_records
             ],
+            dataset_overview=_dataset_overview(dataset_rows),
             empty_state=(
                 EmptyDashboardResponse(
                     title="Import your first product file",
@@ -363,6 +371,141 @@ class PortfolioService:
                 else None
             ),
         )
+
+
+def _dataset_overview(rows: list[DatasetEvidenceRow]) -> DatasetOverviewResponse | None:
+    if not rows:
+        return None
+    if len(rows) > 10_000:
+        raise ValueError("dataset overview exceeds the supported 10,000-product bound")
+
+    total = len(rows)
+    categories: Counter[str] = Counter()
+    subcategories: Counter[str] = Counter()
+    brands: Counter[str] = Counter()
+    coverage_counts: Counter[str] = Counter()
+    estimated_units = 0
+    known_revenue = Decimal("0")
+    revenue_products = 0
+    currencies: set[str] = set()
+
+    for row in rows:
+        snapshot = row.snapshot
+        categories[(row.category or "Unknown category").strip() or "Unknown category"] += 1
+        subcategories[
+            (row.subcategory or "Unknown subcategory").strip() or "Unknown subcategory"
+        ] += 1
+        brands[(row.brand or "Unknown brand").strip() or "Unknown brand"] += 1
+        values = {
+            "buy_box_price": snapshot.buy_box_price,
+            "sales_rank": snapshot.sales_rank,
+            "sales_rank_90d": snapshot.sales_rank_90d,
+            "offer_count": snapshot.new_offer_count
+            if snapshot.new_offer_count is not None
+            else snapshot.total_offer_count,
+            "review_count": snapshot.review_count,
+            "brand": row.brand,
+        }
+        for key, value in values.items():
+            if value is not None and (not isinstance(value, str) or value.strip()):
+                coverage_counts[key] += 1
+        monthly_bought = _estimated_monthly_bought(snapshot)
+        if monthly_bought is not None:
+            coverage_counts["monthly_demand"] += 1
+            estimated_units += monthly_bought
+            if snapshot.buy_box_price is not None:
+                revenue_products += 1
+                known_revenue += snapshot.buy_box_price * monthly_bought
+                if snapshot.currency_code:
+                    currencies.add(snapshot.currency_code)
+
+    demand_coverage = _percentage(coverage_counts["monthly_demand"], total)
+    revenue_coverage = _percentage(revenue_products, total)
+    relative_evidence_ready = all(
+        _percentage(coverage_counts[key], total) >= Decimal("80")
+        for key in ("buy_box_price", "sales_rank", "sales_rank_90d", "offer_count")
+    )
+    revenue_ready = revenue_coverage >= Decimal("70") and len(currencies) == 1
+    readiness: Literal["revenue_ready", "relative_research_only", "insufficient_evidence"]
+    if revenue_ready:
+        readiness = "revenue_ready"
+        title = "Ready for estimated revenue analysis"
+        message = (
+            "Monthly-demand and price evidence cover at least 70% of products. "
+            "Revenue remains a Keepa-derived marketplace estimate."
+        )
+    elif relative_evidence_ready:
+        readiness = "relative_research_only"
+        title = "Ready for relative product research"
+        message = (
+            "Rank, price and seller evidence are usable, but monthly-demand coverage is too low "
+            "for a responsible revenue chart."
+        )
+    else:
+        readiness = "insufficient_evidence"
+        title = "Dataset evidence is incomplete"
+        message = "Key market fields do not cover enough products for reliable comparisons."
+
+    labels = {
+        "buy_box_price": "Current Buy Box price",
+        "sales_rank": "Current sales rank",
+        "sales_rank_90d": "90-day average sales rank",
+        "offer_count": "Seller offers",
+        "review_count": "Review count",
+        "brand": "Brand",
+        "monthly_demand": "Bought in past month",
+    }
+    conclusions = ["revenue_blocked_low_monthly_demand"] if not revenue_ready else []
+    if brands and brands.most_common(1)[0][1] / total >= 0.1:
+        conclusions.append("brand_concentration_requires_review")
+    if categories and len(categories) == 1:
+        conclusions.append("single_root_category_dataset")
+
+    return DatasetOverviewResponse(
+        readiness=readiness,
+        readiness_title=title,
+        readiness_message=message,
+        product_count=total,
+        category_count=len(categories),
+        subcategory_count=len(subcategories),
+        brand_count=len(brands),
+        monthly_demand_coverage_percentage=demand_coverage,
+        revenue_coverage_percentage=revenue_coverage,
+        estimated_monthly_units=estimated_units if revenue_ready else None,
+        estimated_monthly_revenue=known_revenue if revenue_ready else None,
+        currency_code=next(iter(currencies)) if revenue_ready else None,
+        coverage=[
+            EvidenceCoverageResponse(
+                id=key,
+                label=label,
+                populated_products=coverage_counts[key],
+                total_products=total,
+                coverage_percentage=_percentage(coverage_counts[key], total),
+            )
+            for key, label in labels.items()
+        ],
+        top_categories=_distribution(categories, total),
+        top_subcategories=_distribution(subcategories, total),
+        top_brands=_distribution(brands, total),
+        conclusion_codes=conclusions,
+    )
+
+
+def _percentage(value: int, total: int) -> Decimal:
+    if total == 0:
+        return Decimal("0")
+    return (Decimal(value) * Decimal("100") / Decimal(total)).quantize(Decimal("0.1"))
+
+
+def _distribution(values: Counter[str], total: int) -> list[DatasetDistributionResponse]:
+    return [
+        DatasetDistributionResponse(
+            label=label,
+            product_count=count,
+            product_percentage=_percentage(count, total),
+        )
+        for label, count in values.most_common(10)
+    ]
 
 
 def _scope(query: PortfolioScopeQuery) -> PortfolioScope:

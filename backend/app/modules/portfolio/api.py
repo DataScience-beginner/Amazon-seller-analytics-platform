@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.portfolio.schemas import (
     DashboardResponse,
+    DatasetOverviewQuery,
+    DatasetOverviewResponse,
     PortfolioScopeQuery,
     ProductDetailResponse,
     ProductListQuery,
@@ -26,6 +28,18 @@ def get_dashboard(
     session: Annotated[Session, Depends(get_db)],
 ) -> DashboardResponse:
     return PortfolioService(session).dashboard(query)
+
+
+@router.get(
+    "/dashboard/dataset-overview",
+    response_model=DatasetOverviewResponse | None,
+    summary="Read a tenant-scoped dataset overview with an optional category filter",
+)
+def get_dataset_overview(
+    query: Annotated[DatasetOverviewQuery, Query()],
+    session: Annotated[Session, Depends(get_db)],
+) -> DatasetOverviewResponse | None:
+    return PortfolioService(session).dataset_overview(query)
 
 
 @router.get(

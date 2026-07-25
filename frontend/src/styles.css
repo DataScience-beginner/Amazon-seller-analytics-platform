@@ -2205,6 +2205,25 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
+.dataset-bar > button {
+  background: transparent;
+  border: 0;
+  color: var(--brand-dark);
+  cursor: pointer;
+  font-weight: 750;
+  overflow: hidden;
+  padding: 2px 0;
+  text-align: left;
+  text-decoration: underline;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dataset-bar > button.dataset-category--active {
+  color: var(--ink);
+  text-decoration-thickness: 3px;
+}
+
 .dataset-conclusion {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2214,6 +2233,24 @@ tbody tr:hover {
 
 .dataset-conclusion p {
   margin: 7px 0 0;
+}
+
+.category-deep-dive {
+  background: #eef8f4;
+  border: 2px solid #9ed8c3;
+  border-radius: 14px;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  scroll-margin-top: 1rem;
+}
+
+.category-deep-dive > .section-heading p {
+  margin: 4px 0 0;
+}
+
+.category-product-table td:first-child {
+  min-width: 22rem;
 }
 
 @media (max-width: 1100px) {

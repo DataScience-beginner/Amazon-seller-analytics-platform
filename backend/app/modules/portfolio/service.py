@@ -31,6 +31,7 @@ from app.modules.portfolio.schemas import (
     DataNoticeResponse,
     DataQualityAlertResponse,
     DatasetDistributionResponse,
+    DatasetOverviewQuery,
     DatasetOverviewResponse,
     EmptyDashboardResponse,
     EvidenceCoverageResponse,
@@ -303,6 +304,7 @@ class PortfolioService:
         counts = self._repository.dashboard_counts(
             scope, confidence_threshold=self._confidence_threshold
         )
+
         quality_counts = self._repository.data_quality_counts(scope)
         dataset_rows = self._repository.dataset_evidence_rows(scope)
         latest_import = self._repository.latest_import(scope)
@@ -370,6 +372,13 @@ class PortfolioService:
                 if counts.tracked_products == 0
                 else None
             ),
+        )
+
+    def dataset_overview(self, query: DatasetOverviewQuery) -> DatasetOverviewResponse | None:
+        scope = _scope(query)
+        self._repository.ensure_scope(scope)
+        return _dataset_overview(
+            self._repository.dataset_evidence_rows(scope, category=query.category)
         )
 
 

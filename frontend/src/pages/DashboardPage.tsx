@@ -52,7 +52,11 @@ export function DashboardPage() {
       {state.status === 'success' && state.data.kpis.tracked_products > 0 && (
         <div className="dashboard-stack">
           {state.data.dataset_overview && (
-            <DatasetOverview overview={state.data.dataset_overview} />
+            <DatasetOverview
+              overview={state.data.dataset_overview}
+              organisationId={organisationId}
+              marketplaceId={marketplaceId}
+            />
           )}
           <section className="kpi-grid" aria-label="Portfolio key performance indicators">
             <article className="kpi-card">

@@ -111,6 +111,11 @@ returned only when at least 70% of products have both a Keepa bought-in-past-mon
 current Buy Box price, and all contributing rows use one currency. Below that threshold the response
 is `relative_research_only` and revenue fields remain null.
 
+`GET /api/v1/dashboard/dataset-overview` accepts the same required scope plus an optional exact
+`category`. It returns the same aggregate contract for the selected category. The dashboard uses
+this endpoint together with the bounded product collection endpoint to render a category drill-down;
+the selection never changes or reinterprets the whole-dataset overview.
+
 ## Score semantics
 
 All scores are integer 0–100, where higher is favourable:

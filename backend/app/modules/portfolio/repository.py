@@ -427,10 +427,14 @@ class PortfolioRepository:
         )
 
     def dataset_evidence_rows(
-        self, scope: PortfolioScope, *, limit: int = 10_001
+        self,
+        scope: PortfolioScope,
+        *,
+        category: str | None = None,
+        limit: int = 10_001,
     ) -> list[DatasetEvidenceRow]:
         """Return a bounded evidence projection for in-process aggregate calculations."""
-        rows = self._session.execute(
+        statement = (
             select(
                 Product.category,
                 Product.subcategory,
@@ -451,7 +455,10 @@ class PortfolioRepository:
             )
             .order_by(Product.id)
             .limit(limit)
-        ).all()
+        )
+        if category is not None:
+            statement = statement.where(func.lower(Product.category) == category.casefold())
+        rows = self._session.execute(statement).all()
         return [
             DatasetEvidenceRow(
                 category=row[0],

@@ -253,6 +253,22 @@ export async function fetchDashboard(
   return normalizeDashboard(response);
 }
 
+export function fetchDatasetOverview(
+  organisationId: string,
+  marketplaceId: string,
+  category: string,
+  signal?: AbortSignal,
+) {
+  return request<NonNullable<DashboardApiResponse['dataset_overview']>>(
+    `/dashboard/dataset-overview${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+      category,
+    })}`,
+    { signal },
+  );
+}
+
 export async function fetchProducts(
   query: ProductQuery,
   signal?: AbortSignal,

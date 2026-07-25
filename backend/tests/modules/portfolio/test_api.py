@@ -328,6 +328,14 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
                 "marketplace_id": marketplace.id,
             },
         )
+        category_response = client.get(
+            "/api/v1/dashboard/dataset-overview",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+                "category": "Toys & Games",
+            },
+        )
 
     assert response.status_code == 200
     overview = response.json()["dataset_overview"]
@@ -339,6 +347,12 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
     assert overview["estimated_monthly_revenue"] is None
     assert overview["top_categories"][0]["label"] == "Toys & Games"
     assert "revenue_blocked_low_monthly_demand" in overview["conclusion_codes"]
+    assert category_response.status_code == 200
+    assert category_response.json()["product_count"] == 2
+    assert {item["label"] for item in category_response.json()["top_subcategories"]} == {
+        "Cars & Race Cars",
+        "Dolls",
+    }
 
 
 def test_legacy_undated_evidence_is_browsable_but_excluded_from_current_decisions(

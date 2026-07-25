@@ -61,6 +61,10 @@ class PortfolioScopeQuery(BaseModel):
     marketplace_id: ScopeId
 
 
+class DatasetOverviewQuery(PortfolioScopeQuery):
+    category: CategoryText | None = None
+
+
 class ProductListQuery(PortfolioScopeQuery):
     search: SearchText | None = None
     screen: ResearchScreenId = ResearchScreenId.all

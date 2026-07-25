@@ -209,6 +209,25 @@ Profitability, cash efficiency and inventory risk are added when business inputs
 - Links to the Amazon listing when available.
 - No recommendation is presented without its supporting data.
 
+#### SOS-304 — Build a decision-first product research screener
+
+**As a seller,** I want a small, explainable candidate list so I can decide what deserves deeper
+supplier and profitability research without being overwhelmed by raw Keepa columns.
+
+**Acceptance criteria**
+
+- Versioned screens cover priority research, promising, low seller competition, stable pricing,
+  insufficient evidence and the bounded full universe.
+- Results show demand, current seller offers, observed Buy Box price, price stability, data
+  confidence and Keepa-estimated monthly purchases where available.
+- Brand evidence is classified as declared, likely generic or unknown without inferring resale
+  authorisation.
+- Every product receives structured reason, positive, risk and missing-evidence codes from a pure
+  configuration-driven policy.
+- “Priority research” is explicitly a research shortlist, never a buy instruction.
+- Filters and screen selection remain in the URL, results stay server-paginated and charts identify
+  when they represent only the current page.
+
 ## Phase 2 — Unit economics and sourcing
 
 ### Epic E4: Profitability engine

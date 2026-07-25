@@ -1,6 +1,7 @@
 # SellerOS Delivery Status
 
-Last verified implementation target: Phase 2, stories SOS-401 through SOS-502.
+Last verified implementation target: Phase 2, stories SOS-401 through SOS-502, plus the
+decision-first SOS-304 product-research refinement.
 
 | Story | Status | Implemented evidence |
 | --- | --- | --- |
@@ -14,6 +15,7 @@ Last verified implementation target: Phase 2, stories SOS-401 through SOS-502.
 | SOS-301 | Complete | Tenant-scoped KPI dashboard, opportunities, risks, quality and first-use state |
 | SOS-302 | Complete | Server search/filter/sort/pagination with URL-preserved frontend filters |
 | SOS-303 | Complete | Product metrics, score reasons, recommendation evidence and 24-snapshot history |
+| SOS-304 | Complete | Versioned research screens, brand-evidence classification, critical metrics, explainable shortlist and current-page charts |
 | SOS-401 | Complete | Append-only product/default cost revisions, explicit GST basis, fee provenance and audit history |
 | SOS-402 | Complete | Versioned Decimal v2 economics with net-revenue/output-GST trace, eight required metrics and fail-closed partial states |
 | SOS-501 | Complete | Immutable scoped quotations with supplier-name evidence, MOQ/lead time/validity and sealed price tiers |

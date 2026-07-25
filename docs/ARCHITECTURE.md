@@ -14,6 +14,7 @@ sourcing decisions independent from HTTP, React and persistence.
 | `backend/app/modules/imports` | Safe workbook kernel, upload adapter and transactional import application service |
 | `backend/app/modules/scoring` | Pure, versioned 0–100 market scoring kernel |
 | `backend/app/modules/strategies` | Pure, versioned recommendation policy and evidence |
+| `backend/app/modules/research` | Pure, versioned product-research classification and screen policy |
 | `backend/app/modules/portfolio` | Bounded tenant-scoped dashboard/product read models |
 | `backend/app/modules/workspaces` | Local first-use organisation/marketplace bootstrap |
 | `backend/app/modules/profitability` | Pure versioned Decimal unit-economics kernel |
@@ -130,6 +131,12 @@ basis produce partial outputs instead of assumed values.
 The sourcing kernel consumes an immutable quotation, seller-confirmed budget and persisted market
 evidence. Low confidence caps quantities; missing evidence, expired offers and hard-constraint
 failures block all scenarios.
+
+The research kernel converts current confirmed market evidence into an explainable shortlist without
+changing persisted scores or strategy outputs. Its JSON policy is schema-validated and checksummed.
+Brand values classify evidence only; they never prove trademark, category or resale authorisation.
+The strongest result is `priority_research`, not `buy`. Supplier cost, Amazon fees, availability and
+permission remain explicit downstream gates.
 
 Every UI decision uses Observed, Calculated, Estimated, Recommended or User confirmed labels.
 Recommendations are advisory; Phase 2 never purchases, reorders, reprices or marks down inventory.

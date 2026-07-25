@@ -86,14 +86,23 @@ evidence but are excluded from current portfolio, economics and sourcing decisio
 `GET /api/v1/products` requires organisation/marketplace scope and supports:
 
 - `search` across ASIN, title and brand;
+- versioned research `screen` and `brand_classification`;
 - `strategy` and `category`;
-- min/max opportunity score, offer count, price and confidence;
+- min/max opportunity score, offer count, price and confidence, plus demand, competition and price
+  stability sorting;
 - `sort_by`, `sort_direction`, `page` and `page_size` (maximum 100).
 
 Range inversions fail validation. Sorting has a deterministic product-ID tie-breaker. Dashboard and
 product detail use the same latest-snapshot/latest-version semantics as the product collection:
 confirmed observation date first, then same-date revision. Upload time never promotes an older
 dataset over newer market evidence.
+
+The collection and product-detail responses include a `research` assessment from
+`product-research-v1.0.0`, its configuration checksum, structured evidence and brand classification.
+The collection also returns the available screens. `estimated_monthly_bought` is parsed only from
+the exact preserved Keepa header `Monthly Sales Trends: Bought in past month`, remains labelled
+Estimated, and is never substituted when absent. `offer_count` means current listing offers; it is
+not a count of substitute products or a claim about total market competitors.
 
 ## Score semantics
 

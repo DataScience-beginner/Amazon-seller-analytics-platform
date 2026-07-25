@@ -4,7 +4,21 @@ import sys
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Boolean, column, create_engine, create_mock_engine, inspect, table, text
+
+
+def test_boolean_migration_predicate_is_portable() -> None:
+    import_columns = table("import_columns", column("is_mapped", Boolean()))
+    statement = import_columns.update().where(import_columns.c.is_mapped.is_(True))
+
+    postgres = create_mock_engine("postgresql+psycopg://", lambda *_args, **_kwargs: None)
+    sqlite = create_mock_engine("sqlite://", lambda *_args, **_kwargs: None)
+    postgres_sql = str(statement.compile(dialect=postgres.dialect))
+    sqlite_sql = str(statement.compile(dialect=sqlite.dialect))
+
+    assert "is_mapped IS true" in postgres_sql
+    assert "is_mapped IS 1" in sqlite_sql
+    assert "is_mapped = 1" not in postgres_sql
 
 
 def test_alembic_upgrade_and_downgrade(tmp_path: Path) -> None:

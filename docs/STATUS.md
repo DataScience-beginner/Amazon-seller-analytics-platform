@@ -37,6 +37,10 @@ without an interim whole-application preview login. This does not change the pro
 user identity and enforced request-principal tenant authorisation remain required before customer or
 public SaaS access.
 
+The clean PostgreSQL migration path is verified to use dialect-portable boolean predicates. Railway
+must reference the private Postgres `DATABASE_URL`; a successful startup reports
+`Context impl PostgresqlImpl` and reaches Uvicorn only after all migrations complete.
+
 ## Dated Keepa dataset evidence
 
 The registered `keepa.product_finder` v1.0.0 source model contains 173 headers. The reference export

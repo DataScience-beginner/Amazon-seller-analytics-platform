@@ -132,9 +132,16 @@ def upgrade() -> None:
         )
 
     op.execute("UPDATE import_columns SET normalized_header = source_header")
+    import_columns = sa.table(
+        "import_columns",
+        sa.column("mapping_status", mapping_status),
+        sa.column("mapping_source", mapping_source),
+        sa.column("is_mapped", sa.Boolean()),
+    )
     op.execute(
-        "UPDATE import_columns SET mapping_status = 'mapped', mapping_source = 'registry' "
-        "WHERE is_mapped = 1"
+        import_columns.update()
+        .where(import_columns.c.is_mapped.is_(True))
+        .values(mapping_status="mapped", mapping_source="registry")
     )
 
     with op.batch_alter_table("import_row_errors") as batch_op:

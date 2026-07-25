@@ -6,12 +6,12 @@ import re
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, selectinload
 
@@ -36,9 +36,17 @@ from app.models.domain import (
 from app.models.domain import (
     ScoreResult as ScoreResultRecord,
 )
+from app.modules.imports.dataset_schema import (
+    DatasetColumnClassification,
+    DatasetSchemaInspection,
+    ProductFinderDatasetSchema,
+    observation_date_candidates,
+    suggest_observed_on,
+)
 from app.modules.imports.domain import (
     MappingClassification,
     MappingReport,
+    SourceColumn,
     WorkbookInspection,
     WorkbookInspectionError,
     WorkbookRow,
@@ -46,6 +54,8 @@ from app.modules.imports.domain import (
 )
 from app.modules.imports.registry import AliasRegistry, RegistryValidationError
 from app.modules.imports.schemas import (
+    ConfirmImportCommand,
+    ImportDatasetResponse,
     ImportDetailResponse,
     ImportFailure,
     ImportListItem,
@@ -159,6 +169,7 @@ def create_import_for_workspace(
     batch.workbook_sheet_name = inspection.selected_sheet
     batch.header_row_number = inspection.header_row
     batch.alias_registry_version = registry.version
+    _apply_dataset_metadata(batch, inspection)
     session.add(batch)
     _apply_mapping_report(batch, inspection)
     session.add(
@@ -170,6 +181,15 @@ def create_import_for_workspace(
             payload={
                 "checksum": batch.checksum,
                 "mapping_requires_confirmation": inspection.mapping.requires_confirmation,
+                "dataset_schema_id": batch.dataset_schema_id,
+                "dataset_schema_version": batch.dataset_schema_version,
+                "dataset_schema_match": batch.dataset_schema_match,
+                "observed_on_suggestion": (
+                    batch.observed_on_suggestion.isoformat()
+                    if batch.observed_on_suggestion is not None
+                    else None
+                ),
+                "observation_suggestion_source": batch.observation_suggestion_source,
             },
         )
     )
@@ -221,6 +241,9 @@ def list_imports(
                 status=batch.status.value,
                 uploaded_at=batch.uploaded_at,
                 completed_at=batch.completed_at,
+                observed_on=batch.observed_on,
+                period_month=batch.period_month,
+                revision=batch.dataset_revision,
                 summary=_summary(batch) if batch.status is ImportStatus.completed else None,
             )
             for batch in batches
@@ -313,6 +336,7 @@ def update_mapping(
 def confirm_import(
     session: Session,
     import_id: str,
+    command: ConfirmImportCommand,
     settings: Settings,
     *,
     organisation_id: str,
@@ -322,6 +346,7 @@ def confirm_import(
         return _confirm_import_once(
             session,
             import_id,
+            command,
             settings,
             organisation_id=organisation_id,
             marketplace_id=marketplace_id,
@@ -384,6 +409,7 @@ def _is_retryable_operational_error(exc: OperationalError) -> bool:
 def _confirm_import_once(
     session: Session,
     import_id: str,
+    command: ConfirmImportCommand,
     settings: Settings,
     *,
     organisation_id: str,
@@ -398,6 +424,16 @@ def _confirm_import_once(
     )
     registry = AliasRegistry.default()
     if batch.status is ImportStatus.completed:
+        if batch.observed_on != command.observed_on:
+            raise ConflictError(
+                "import_observed_on_conflict",
+                "A completed import cannot be reassigned to a different observation date",
+                details={
+                    "confirmed_observed_on": (
+                        batch.observed_on.isoformat() if batch.observed_on is not None else None
+                    )
+                },
+            )
         _cleanup_staged_upload(session, batch, settings, lifecycle="completed")
         return _detail_response(batch, registry=registry)
     if batch.status is not ImportStatus.pending:
@@ -408,6 +444,12 @@ def _confirm_import_once(
         raise ConflictError(
             "alias_registry_version_mismatch",
             "The import was created with a different alias registry version",
+        )
+    if command.observed_on > datetime.now(UTC).date():
+        raise ApplicationError(
+            "observed_on_in_future",
+            "The dataset observation date cannot be in the future",
+            status_code=422,
         )
 
     try:
@@ -436,6 +478,8 @@ def _confirm_import_once(
             "The workbook is missing required canonical fields",
             details={"fields": list(inspection.mapping.missing_required_fields)},
         )
+    _apply_dataset_metadata(batch, inspection)
+    _assign_dataset_observation(session, batch, observed_on=command.observed_on)
 
     try:
         rows = tuple(
@@ -463,12 +507,54 @@ def _confirm_import_once(
                     "matched": batch.matched_rows,
                     "skipped": batch.skipped_rows,
                     "failed": batch.failed_rows,
+                    "observed_on": batch.observed_on.isoformat()
+                    if batch.observed_on is not None
+                    else None,
+                    "period_month": batch.period_month.isoformat()
+                    if batch.period_month is not None
+                    else None,
+                    "dataset_revision": batch.dataset_revision,
+                    "dataset_schema_id": batch.dataset_schema_id,
+                    "dataset_schema_version": batch.dataset_schema_version,
                 },
             )
         )
         session.commit()
     except OperationalError:
         raise
+    except IntegrityError as exc:
+        session.rollback()
+        if _is_dataset_revision_conflict(exc):
+            logger.warning(
+                "Import dataset revision assignment conflicted and can be retried",
+                extra={"import_id": import_id},
+            )
+            raise ApplicationError(
+                "import_dataset_revision_retryable",
+                "Another dataset revision completed concurrently; retry confirmation",
+                status_code=503,
+                details={"import_id": import_id, "retryable": True},
+            ) from exc
+        logger.error(
+            "Import processing failed",
+            extra={"import_id": import_id, "failure_class": type(exc).__name__},
+        )
+        failed = _get_batch(
+            session,
+            import_id,
+            organisation_id=organisation_id,
+            marketplace_id=marketplace_id,
+            for_update=True,
+        )
+        failure_code, failure_message = _failure_record(exc)
+        _record_import_failure(
+            session,
+            failed,
+            failure_code=failure_code,
+            failure_message=failure_message,
+        )
+        _cleanup_staged_upload(session, failed, settings, lifecycle="failed")
+        raise _public_import_failure(exc, import_id) from exc
     except Exception as exc:
         session.rollback()
         logger.error(
@@ -547,6 +633,13 @@ def _persist_rows(
     rows: tuple[WorkbookRow, ...],
     inspection: WorkbookInspection,
 ) -> None:
+    if (
+        batch.observed_on is None
+        or batch.observed_on_source is None
+        or batch.period_month is None
+        or batch.dataset_revision is None
+    ):
+        raise RuntimeError("Import observation metadata must be assigned before row persistence")
     marketplace = _get_marketplace(
         session,
         organisation_id=batch.organisation_id,
@@ -625,12 +718,11 @@ def _persist_rows(
         session.add(product)
     session.flush()
 
-    history_counts = _history_counts(session, {product.id for product in products.values()})
-    mapped_ordinals = {
-        entry.column.ordinal
-        for entry in inspection.mapping.columns
-        if entry.is_resolved and entry.column is not None
-    }
+    history_months = _history_months(
+        session,
+        {product.id for product in products.values()},
+        through_period=batch.period_month,
+    )
     scoring_checksum = _configuration_checksum(
         Path(__file__).parents[1] / "scoring" / "configs" / "v1.json"
     )
@@ -639,18 +731,27 @@ def _persist_rows(
     )
     classifier = StrategyClassifier()
     imported_at = datetime.now(UTC)
+    dataset_schema = ProductFinderDatasetSchema.default()
+    dataset_classifications = {
+        entry.column.ordinal: dataset_schema.classify_column(
+            normalized_header=entry.column.normalized_header,
+        )
+        for entry in inspection.mapping.columns
+        if entry.column is not None
+    }
 
     new_product_ids = {product.id for product in new_products}
     for item in valid_rows:
         product = products[item.asin]
         values = item.row.canonical_values
-        _update_product_summary(product, values)
         snapshot = ProductSnapshot(
             id=str(uuid.uuid4()),
             product=product,
             import_batch=batch,
             snapshot_kind=SnapshotKind.keepa,
             snapshot_at=imported_at,
+            observed_on=batch.observed_on,
+            observed_on_source=batch.observed_on_source,
             source_row_number=item.row.row_number,
             title=_text(values.get("title")),
             brand=_text(values.get("brand")),
@@ -675,6 +776,14 @@ def _persist_rows(
             image_url=_text(values.get("image_url")),
             amazon_url=_text(values.get("amazon_url")),
             market_metrics=dict(values),
+            source_payload=[
+                {
+                    "ordinal": source_cell.ordinal,
+                    "header": source_cell.source_header,
+                    "value": source_cell.value,
+                }
+                for source_cell in item.row.source_values
+            ],
         )
         session.add(snapshot)
         malformed_ordinals = {
@@ -682,8 +791,9 @@ def _persist_rows(
         }
         for source_cell in item.row.source_values:
             if (
-                source_cell.ordinal in mapped_ordinals
-                and source_cell.ordinal not in malformed_ordinals
+                source_cell.ordinal not in malformed_ordinals
+                and dataset_classifications[source_cell.ordinal]
+                is not DatasetColumnClassification.unrecognized
             ):
                 continue
             snapshot.raw_attributes.append(
@@ -705,7 +815,7 @@ def _persist_rows(
                     data_confidence=scorecard.data_confidence.value,
                     overall_opportunity=scorecard.overall_opportunity.value,
                 ),
-                history_months=max(1, history_counts.get(product.id, 0) + 1),
+                history_months=history_months.get(product.id, 1),
             )
         )
         _add_recommendation(
@@ -714,7 +824,9 @@ def _persist_rows(
             confidence_score=scorecard.data_confidence.value,
             configuration_checksum=strategy_checksum,
         )
-        product.latest_snapshot = snapshot
+        if _should_replace_latest_snapshot(product.latest_snapshot, snapshot):
+            _update_product_summary(product, values)
+            product.latest_snapshot = snapshot
         if product.id in new_product_ids:
             batch.created_rows += 1
         else:
@@ -874,6 +986,78 @@ def _apply_mapping_report(batch: ImportBatch, inspection: WorkbookInspection) ->
     batch.alias_registry_version = inspection.mapping.registry_version
 
 
+def _apply_dataset_metadata(
+    batch: ImportBatch,
+    inspection: WorkbookInspection,
+) -> DatasetSchemaInspection:
+    dataset = ProductFinderDatasetSchema.default().inspect(inspection.columns)
+    suggestion = suggest_observed_on(
+        sheet_name=inspection.selected_sheet,
+        original_filename=batch.original_filename,
+    )
+    batch.dataset_schema_id = dataset.schema_id or "keepa.unregistered"
+    batch.dataset_schema_version = dataset.schema_version or (
+        f"headers-{dataset.source_header_checksum[:12]}"
+    )
+    batch.dataset_schema_match = dataset.match.value
+    batch.dataset_schema_checksum = ProductFinderDatasetSchema.default().configuration_checksum
+    batch.source_header_checksum = dataset.source_header_checksum
+    batch.source_column_count = dataset.source_column_count
+    batch.observed_on_suggestion = suggestion.observed_on if suggestion is not None else None
+    batch.observation_suggestion_source = (
+        suggestion.source.value if suggestion is not None else None
+    )
+    batch.observation_date_candidates = [
+        {"date": candidate.observed_on.isoformat(), "source": candidate.source.value}
+        for candidate in observation_date_candidates(
+            sheet_name=inspection.selected_sheet,
+            original_filename=batch.original_filename,
+        )
+    ]
+    return dataset
+
+
+def _assign_dataset_observation(
+    session: Session,
+    batch: ImportBatch,
+    *,
+    observed_on: date,
+) -> None:
+    if batch.dataset_schema_id is None:
+        raise RuntimeError("Dataset schema identity must be assigned before observation metadata")
+    period_month = date(observed_on.year, observed_on.month, 1)
+    revisions = session.scalars(
+        select(ImportBatch.dataset_revision)
+        .where(
+            ImportBatch.organisation_id == batch.organisation_id,
+            ImportBatch.marketplace_id == batch.marketplace_id,
+            ImportBatch.dataset_schema_id == batch.dataset_schema_id,
+            ImportBatch.period_month == period_month,
+            ImportBatch.id != batch.id,
+        )
+        .order_by(ImportBatch.dataset_revision.desc())
+        .with_for_update()
+    ).all()
+    batch.observed_on = observed_on
+    batch.observed_on_source = "user_confirmed"
+    batch.period_month = period_month
+    batch.dataset_revision = (
+        max((revision for revision in revisions if revision is not None), default=0) + 1
+    )
+
+
+def _is_dataset_revision_conflict(exc: IntegrityError) -> bool:
+    constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+    if constraint_name == "uq_import_dataset_period_revision":
+        return True
+    normalized = str(exc.orig).casefold()
+    return (
+        "unique constraint failed" in normalized
+        and "import_batches.dataset_revision" in normalized
+        and "import_batches.period_month" in normalized
+    )
+
+
 def _mapping_status(classification: MappingClassification) -> MappingStatus:
     if classification in (MappingClassification.required, MappingClassification.optional):
         return MappingStatus.mapped
@@ -909,6 +1093,7 @@ def _detail_response(
             header_row_number=batch.header_row_number,
             alias_registry_version=batch.alias_registry_version,
         ),
+        dataset=_dataset_response(batch, inspection),
         mapping=mapping,
         preview_rows=_preview_response(inspection) if inspection is not None else [],
         summary=_summary(batch) if batch.status is ImportStatus.completed else None,
@@ -925,6 +1110,7 @@ def _mapping_response_from_report(
     report: MappingReport,
     inspection: WorkbookInspection,
 ) -> MappingResponse:
+    dataset_schema = ProductFinderDatasetSchema.default()
     samples_by_ordinal: dict[int, list[Any]] = {column.ordinal: [] for column in inspection.columns}
     for row in inspection.preview_rows:
         for cell in row.source_values:
@@ -945,6 +1131,9 @@ def _mapping_response_from_report(
                 normalized_header=entry.column.normalized_header,
                 canonical_field=entry.canonical_field,
                 classification=entry.classification.value,
+                dataset_classification=dataset_schema.classify_column(
+                    normalized_header=entry.column.normalized_header,
+                ).value,
                 candidates=list(entry.candidates),
                 required_candidates=list(entry.required_candidates),
                 is_required=entry.is_required,
@@ -963,6 +1152,7 @@ def _mapping_response_from_records(
     batch: ImportBatch,
     registry: AliasRegistry,
 ) -> MappingResponse:
+    dataset_schema = ProductFinderDatasetSchema.default()
     represented = {
         column.canonical_field for column in batch.columns if column.canonical_field is not None
     }
@@ -997,6 +1187,9 @@ def _mapping_response_from_records(
                 normalized_header=column.normalized_header,
                 canonical_field=column.canonical_field,
                 classification=classification,
+                dataset_classification=dataset_schema.classify_column(
+                    normalized_header=column.normalized_header,
+                ).value,
                 candidates=list(column.mapping_candidates),
                 required_candidates=required_candidates,
                 is_required=column.is_required,
@@ -1013,6 +1206,75 @@ def _mapping_response_from_records(
             column.mapping_status is MappingStatus.ambiguous for column in batch.columns
         )
         or bool(missing_required),
+    )
+
+
+def _dataset_response(
+    batch: ImportBatch,
+    inspection: WorkbookInspection | None,
+) -> ImportDatasetResponse:
+    schema = ProductFinderDatasetSchema.default()
+    columns = (
+        inspection.columns
+        if inspection is not None
+        else tuple(
+            SourceColumn(
+                ordinal=column.source_column_ordinal,
+                source_header=column.source_header,
+                normalized_header=column.normalized_header,
+            )
+            for column in sorted(batch.columns, key=lambda item: item.source_column_ordinal)
+        )
+    )
+    inspected = schema.inspect(columns)
+    suggestion = suggest_observed_on(
+        sheet_name=(
+            inspection.selected_sheet if inspection is not None else batch.workbook_sheet_name
+        ),
+        original_filename=batch.original_filename,
+    )
+    candidates = observation_date_candidates(
+        sheet_name=(
+            inspection.selected_sheet if inspection is not None else batch.workbook_sheet_name
+        ),
+        original_filename=batch.original_filename,
+    )
+    return ImportDatasetResponse(
+        schema_id=batch.dataset_schema_id or inspected.schema_id or "keepa.unregistered",
+        schema_version=batch.dataset_schema_version
+        or inspected.schema_version
+        or f"headers-{inspected.source_header_checksum[:12]}",
+        schema_match=batch.dataset_schema_match or inspected.match.value,
+        dataset_schema_checksum=(batch.dataset_schema_checksum or schema.configuration_checksum),
+        source_column_count=batch.source_column_count or inspected.source_column_count,
+        registered_column_count=inspected.registered_column_count,
+        matched_column_count=inspected.matched_column_count,
+        new_headers=list(inspected.new_headers),
+        missing_headers=list(inspected.missing_headers),
+        source_header_checksum=batch.source_header_checksum or inspected.source_header_checksum,
+        observed_on=batch.observed_on,
+        period_month=batch.period_month,
+        revision=batch.dataset_revision,
+        date_status=(
+            "confirmed"
+            if batch.observed_on is not None
+            else "legacy_unconfirmed"
+            if batch.status is ImportStatus.completed
+            else "pending_confirmation"
+        ),
+        observation_date_candidates=(
+            list(batch.observation_date_candidates)
+            if batch.observation_date_candidates
+            else [
+                {"date": candidate.observed_on.isoformat(), "source": candidate.source.value}
+                for candidate in candidates
+            ]
+        ),
+        observed_on_suggestion=batch.observed_on_suggestion
+        or (suggestion.observed_on if suggestion is not None else None),
+        suggestion_source=batch.observation_suggestion_source
+        or (suggestion.source.value if suggestion is not None else None),
+        observed_on_source=batch.observed_on_source,
     )
 
 
@@ -1218,7 +1480,11 @@ def _load_products(
     for start in range(0, len(ordered), _QUERY_CHUNK_SIZE):
         chunk = ordered[start : start + _QUERY_CHUNK_SIZE]
         for product in session.scalars(
-            select(Product).where(
+            select(Product)
+            .options(
+                selectinload(Product.latest_snapshot).selectinload(ProductSnapshot.import_batch)
+            )
+            .where(
                 Product.organisation_id == organisation_id,
                 Product.marketplace_id == marketplace_id,
                 Product.asin.in_(chunk),
@@ -1228,18 +1494,33 @@ def _load_products(
     return products
 
 
-def _history_counts(session: Session, product_ids: set[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
+def _history_months(
+    session: Session,
+    product_ids: set[str],
+    *,
+    through_period: date,
+) -> dict[str, int]:
+    periods_by_product: dict[str, set[date]] = {product_id: set() for product_id in product_ids}
     ordered = sorted(product_ids)
     for start in range(0, len(ordered), _QUERY_CHUNK_SIZE):
         chunk = ordered[start : start + _QUERY_CHUNK_SIZE]
         rows = session.execute(
-            select(ProductSnapshot.product_id, func.count(ProductSnapshot.id))
-            .where(ProductSnapshot.product_id.in_(chunk))
-            .group_by(ProductSnapshot.product_id)
+            select(ProductSnapshot.product_id, ImportBatch.period_month)
+            .join(ImportBatch, ImportBatch.id == ProductSnapshot.import_batch_id)
+            .where(
+                ProductSnapshot.product_id.in_(chunk),
+                ImportBatch.period_month.is_not(None),
+                ImportBatch.period_month <= through_period,
+            )
+            .distinct()
         )
-        counts.update({product_id: int(count) for product_id, count in rows})
-    return counts
+        for product_id, period_month in rows:
+            if period_month is not None:
+                periods_by_product[product_id].add(period_month)
+    return {
+        product_id: len(periods | {through_period})
+        for product_id, periods in periods_by_product.items()
+    }
 
 
 def _update_product_summary(product: Product, values: dict[str, Any]) -> None:
@@ -1254,6 +1535,29 @@ def _update_product_summary(product: Product, values: dict[str, Any]) -> None:
         value = _text(values.get(canonical_field))
         if value is not None:
             setattr(product, attribute, value)
+
+
+def _should_replace_latest_snapshot(
+    latest: ProductSnapshot | None,
+    candidate: ProductSnapshot,
+) -> bool:
+    if latest is None:
+        return True
+    if candidate.observed_on is None:
+        return False
+    if latest.observed_on is None:
+        return True
+    if candidate.observed_on != latest.observed_on:
+        return candidate.observed_on > latest.observed_on
+    candidate_batch = candidate.import_batch
+    latest_batch = latest.import_batch
+    candidate_revision = candidate_batch.dataset_revision if candidate_batch is not None else None
+    latest_revision = latest_batch.dataset_revision if latest_batch is not None else None
+    if candidate_revision is None:
+        return False
+    if latest_revision is None:
+        return True
+    return candidate_revision > latest_revision
 
 
 def _normalize_asin(value: Any) -> str | None:

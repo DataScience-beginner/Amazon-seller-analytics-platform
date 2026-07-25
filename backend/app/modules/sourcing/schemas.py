@@ -169,6 +169,7 @@ class TestBuyEvidenceResponse(BaseModel):
     monthly_demand_label: Literal["estimated"] | None
     monthly_demand_source: Literal["keepa_monthly_sold"] | None
     market_snapshot_at: datetime | None
+    market_observed_on: date | None
     data_confidence_score_result_id: str | None
     data_confidence_score: int | None
     data_confidence_label: Literal["calculated"] | None

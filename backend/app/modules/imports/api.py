@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
-from app.modules.imports.schemas import ImportDetailResponse, ImportListResponse, MappingUpdate
+from app.modules.imports.schemas import (
+    ConfirmImportCommand,
+    ImportDetailResponse,
+    ImportListResponse,
+    MappingUpdate,
+)
 from app.modules.imports.service import (
     confirm_import,
     create_import_for_workspace,
@@ -92,6 +97,7 @@ def put_import_mapping(
 @router.post("/{import_id}/confirm", response_model=ImportDetailResponse)
 def post_import_confirmation(
     import_id: str,
+    command: ConfirmImportCommand,
     organisation_id: Annotated[str, Query(min_length=1, max_length=36)],
     marketplace_id: Annotated[str, Query(min_length=1, max_length=36)],
     session: Annotated[Session, Depends(get_db)],
@@ -100,6 +106,7 @@ def post_import_confirmation(
     return confirm_import(
         session,
         import_id,
+        command,
         settings,
         organisation_id=organisation_id,
         marketplace_id=marketplace_id,

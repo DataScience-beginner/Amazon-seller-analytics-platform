@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -27,6 +27,7 @@ class MappingColumnResponse(BaseModel):
     normalized_header: str
     canonical_field: str | None
     classification: str
+    dataset_classification: str
     candidates: list[str] = Field(default_factory=list)
     required_candidates: list[str] = Field(default_factory=list)
     is_required: bool
@@ -53,6 +54,27 @@ class ImportFailure(BaseModel):
     message: str
 
 
+class ImportDatasetResponse(BaseModel):
+    schema_id: str | None
+    schema_version: str | None
+    schema_match: str
+    dataset_schema_checksum: str
+    source_column_count: int
+    registered_column_count: int
+    matched_column_count: int
+    new_headers: list[str] = Field(default_factory=list)
+    missing_headers: list[str] = Field(default_factory=list)
+    source_header_checksum: str | None
+    observed_on: date | None
+    period_month: date | None
+    revision: int | None
+    date_status: str
+    observation_date_candidates: list[dict[str, str]] = Field(default_factory=list)
+    observed_on_suggestion: date | None
+    suggestion_source: str | None
+    observed_on_source: str | None
+
+
 class ImportDetailResponse(BaseModel):
     id: str
     organisation_id: str
@@ -64,6 +86,7 @@ class ImportDetailResponse(BaseModel):
     confirmed_at: datetime | None
     completed_at: datetime | None
     workbook: ImportWorkbook
+    dataset: ImportDatasetResponse
     mapping: MappingResponse
     preview_rows: list[PreviewRowResponse] = Field(default_factory=list)
     summary: ImportSummary | None
@@ -77,6 +100,9 @@ class ImportListItem(BaseModel):
     status: str
     uploaded_at: datetime
     completed_at: datetime | None
+    observed_on: date | None
+    period_month: date | None
+    revision: int | None
     summary: ImportSummary | None
 
 
@@ -100,3 +126,7 @@ class MappingUpdate(BaseModel):
         if any(ordinal < 1 for ordinal in mappings):
             raise ValueError("Mapping ordinals must be positive one-based column numbers")
         return mappings
+
+
+class ConfirmImportCommand(BaseModel):
+    observed_on: date

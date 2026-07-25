@@ -68,6 +68,8 @@ def _workspace(
         id=f"snapshot-{product_id}",
         product=product,
         snapshot_at=datetime(2026, 5, 1, tzinfo=UTC),
+        observed_on=datetime(2026, 5, 1, tzinfo=UTC).date(),
+        observed_on_source="user_confirmed",
         buy_box_price=Decimal("100.00"),
         currency_code="INR",
     )
@@ -411,6 +413,8 @@ def test_tax_inclusive_profile_exposes_net_revenue_and_output_gst(db_session: Se
         id=f"inclusive-snapshot-{product.id}",
         product=product,
         snapshot_at=datetime(2026, 5, 2, tzinfo=UTC),
+        observed_on=datetime(2026, 5, 2, tzinfo=UTC).date(),
+        observed_on_source="user_confirmed",
         buy_box_price=Decimal("110.00"),
         currency_code="INR",
     )
@@ -446,6 +450,8 @@ def test_negative_imported_price_is_preserved_but_excluded_from_economics(
         id=f"negative-snapshot-{product.id}",
         product=product,
         snapshot_at=datetime(2026, 5, 2, tzinfo=UTC),
+        observed_on=datetime(2026, 5, 2, tzinfo=UTC).date(),
+        observed_on_source="user_confirmed",
         buy_box_price=Decimal("-1.00"),
         currency_code="INR",
     )
@@ -473,6 +479,46 @@ def test_negative_imported_price_is_preserved_but_excluded_from_economics(
     assert payload["calculation"]["outputs"]["contribution_profit"] is None
     assert payload["calculation"]["outputs"]["break_even_price"] is not None
     assert "ECONOMICS_SELLING_PRICE_INVALID" in {notice["code"] for notice in payload["notices"]}
+
+
+def test_legacy_undated_snapshot_is_not_used_as_observed_economics(
+    db_session: Session,
+) -> None:
+    organisation, marketplace, product = _workspace(
+        db_session,
+        organisation_id="economics-org-undated",
+        marketplace_id="economics-market-undated",
+        product_id="economics-product-undated",
+    )
+    legacy_snapshot = ProductSnapshot(
+        id=f"legacy-snapshot-{product.id}",
+        product=product,
+        snapshot_at=datetime(2026, 5, 3, tzinfo=UTC),
+        buy_box_price=Decimal("120.00"),
+        currency_code="INR",
+    )
+    db_session.add(legacy_snapshot)
+    db_session.flush()
+    product.latest_snapshot_id = legacy_snapshot.id
+    db_session.commit()
+    scope = {"organisation_id": organisation.id, "marketplace_id": marketplace.id}
+
+    with _client(db_session) as client:
+        created = client.post(
+            "/api/v1/cost-profiles",
+            params=scope,
+            json=_profile_payload(product_id=product.id),
+        )
+        response = client.get(f"/api/v1/products/{product.id}/economics", params=scope)
+
+    assert created.status_code == 201
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["observed_price"] is None
+    assert payload["calculation"]["inputs"]["selling_price"] is None
+    assert "ECONOMICS_OBSERVATION_DATE_UNCONFIRMED" in {
+        notice["code"] for notice in payload["notices"]
+    }
 
 
 def test_legacy_null_tax_basis_fails_closed_without_inference(db_session: Session) -> None:

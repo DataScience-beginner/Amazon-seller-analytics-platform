@@ -46,6 +46,7 @@ class ProductQuerySpec:
     sort_direction: SortDirection = SortDirection.descending
     page: int = 1
     page_size: int = 25
+    require_confirmed_observation: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +79,7 @@ class DataQualityCounts:
     missing_buy_box_price: int
     missing_opportunity_score: int
     missing_recommendation: int
+    unconfirmed_observation_date: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,13 +163,14 @@ class PortfolioRepository:
         )
         statement = (
             bundle.statement.where(
+                bundle.snapshot.observed_on.is_not(None),
                 or_(
                     recommendation.strategy.in_(
                         [Strategy.CLEARANCE_WATCH.value, Strategy.AVOID.value]
                     ),
                     confidence_score.score_value < confidence_threshold,
                     overall_score.score_value < weak_score_threshold,
-                )
+                ),
             )
             .order_by(
                 risk_priority.asc(),
@@ -208,7 +211,11 @@ class PortfolioRepository:
             self._session.scalars(
                 select(ProductSnapshot)
                 .where(ProductSnapshot.product_id == product_id)
-                .order_by(ProductSnapshot.snapshot_at.desc(), ProductSnapshot.id.desc())
+                .order_by(
+                    ProductSnapshot.observed_on.desc().nulls_last(),
+                    ProductSnapshot.snapshot_at.desc(),
+                    ProductSnapshot.id.desc(),
+                )
                 .limit(limit)
             ).all()
         )
@@ -285,6 +292,7 @@ class PortfolioRepository:
                 Product.organisation_id == scope.organisation_id,
                 Product.marketplace_id == scope.marketplace_id,
                 recommendation.id.is_not(None),
+                bundle.snapshot.observed_on.is_not(None),
             )
             .group_by(recommendation.strategy)
         ).all()
@@ -297,12 +305,29 @@ class PortfolioRepository:
         row = self._session.execute(
             bundle.statement.with_only_columns(
                 func.count(Product.id),
-                func.count(bundle.recommendation.id),
-                func.avg(bundle.overall_score.score_value),
+                func.count(
+                    case(
+                        (
+                            bundle.snapshot.observed_on.is_not(None),
+                            bundle.recommendation.id,
+                        )
+                    )
+                ),
+                func.avg(
+                    case(
+                        (
+                            bundle.snapshot.observed_on.is_not(None),
+                            bundle.overall_score.score_value,
+                        )
+                    )
+                ),
                 func.sum(
                     case(
                         (
-                            bundle.confidence_score.score_value < confidence_threshold,
+                            and_(
+                                bundle.snapshot.observed_on.is_not(None),
+                                bundle.confidence_score.score_value < confidence_threshold,
+                            ),
                             1,
                         ),
                         else_=0,
@@ -360,6 +385,18 @@ class PortfolioRepository:
                         else_=0,
                     )
                 ),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                bundle.snapshot.id.is_not(None),
+                                bundle.snapshot.observed_on.is_(None),
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
             ).order_by(None)
         ).one()
         return DataQualityCounts(
@@ -367,6 +404,7 @@ class PortfolioRepository:
             missing_buy_box_price=int(row[1] or 0),
             missing_opportunity_score=int(row[2] or 0),
             missing_recommendation=int(row[3] or 0),
+            unconfirmed_observation_date=int(row[4] or 0),
         )
 
     def _build_product_projection(self, scope: PortfolioScope) -> _ProjectionBundle:
@@ -489,6 +527,8 @@ class PortfolioRepository:
             statement = statement.where(bundle.confidence_score.score_value >= spec.min_confidence)
         if spec.max_confidence is not None:
             statement = statement.where(bundle.confidence_score.score_value <= spec.max_confidence)
+        if spec.require_confirmed_observation:
+            statement = statement.where(bundle.snapshot.observed_on.is_not(None))
         return statement
 
     @staticmethod
@@ -504,6 +544,7 @@ class PortfolioRepository:
             ProductSortField.price: bundle.snapshot.buy_box_price,
             ProductSortField.offer_count: bundle.offer_count,
             ProductSortField.snapshot_at: bundle.snapshot.snapshot_at,
+            ProductSortField.observed_on: bundle.snapshot.observed_on,
             ProductSortField.asin: func.lower(Product.asin),
             ProductSortField.product_title: func.lower(Product.title),
             ProductSortField.brand: func.lower(Product.brand),

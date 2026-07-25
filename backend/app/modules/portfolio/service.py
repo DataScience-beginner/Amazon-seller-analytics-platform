@@ -203,6 +203,7 @@ class PortfolioService:
             StrategyHistoryResponse(
                 snapshot_id=snapshot.id,
                 snapshot_at=snapshot.snapshot_at,
+                observed_on=snapshot.observed_on,
                 strategy=recommendation.strategy,
                 confidence=recommendation.confidence,
                 rules_version=recommendation.rules_version,
@@ -258,6 +259,7 @@ class PortfolioService:
                 sort_by=ProductSortField.overall_opportunity,
                 page=1,
                 page_size=5,
+                require_confirmed_observation=True,
             )
         )
         risk_records = self._repository.list_risk_products(
@@ -461,6 +463,7 @@ def _snapshot_response(
         import_batch_id=snapshot.import_batch_id,
         snapshot_kind=snapshot.snapshot_kind.value,
         snapshot_at=snapshot.snapshot_at,
+        observed_on=snapshot.observed_on,
         metrics=_market_metrics(snapshot),
         scores=_ordered_scores(scores),
         recommendation=_recommendation_response(recommendation),
@@ -472,12 +475,18 @@ def _product_summary(
 ) -> ProductSummaryResponse:
     product = record.product
     snapshot = record.snapshot
-    recommendation = _recommendation_response(record.recommendation)
+    recommendation = (
+        _recommendation_response(record.recommendation)
+        if snapshot is not None and snapshot.observed_on is not None
+        else None
+    )
     codes: list[str] = []
     if snapshot is None:
         codes.append("snapshot_missing")
     if snapshot is not None and snapshot.buy_box_price is None:
         codes.append("buy_box_price_missing")
+    if snapshot is not None and snapshot.observed_on is None:
+        codes.append("observation_date_unconfirmed")
     if record.overall_score is None:
         codes.append("overall_opportunity_score_missing")
     if record.confidence_score is None:
@@ -501,6 +510,7 @@ def _product_summary(
         amazon_url=_amazon_url(marketplace_code, product.asin),
         latest_snapshot_id=snapshot.id if snapshot else None,
         latest_snapshot_at=snapshot.snapshot_at if snapshot else None,
+        latest_observed_on=snapshot.observed_on if snapshot else None,
         buy_box_price=snapshot.buy_box_price if snapshot else None,
         currency_code=snapshot.currency_code if snapshot else None,
         offer_count=record.offer_count,
@@ -564,6 +574,18 @@ def _data_notices(
         for field, value in values.items()
         if value is None
     ]
+    if snapshot.observed_on is None:
+        notices.append(
+            DataNoticeResponse(
+                code="observation_date_unconfirmed",
+                severity="missing",
+                field="latest_snapshot.observed_on",
+                message=(
+                    "This legacy snapshot has no user-confirmed market observation date; "
+                    "its recommendation is historical evidence, not a current decision."
+                ),
+            )
+        )
     for score_name in ScoreName:
         if score_name.value not in scores:
             notices.append(
@@ -620,6 +642,9 @@ def _latest_import_response(import_batch: ImportBatch | None) -> LatestImportRes
         status=import_batch.status.value,
         uploaded_at=import_batch.uploaded_at,
         completed_at=import_batch.completed_at,
+        observed_on=import_batch.observed_on,
+        period_month=import_batch.period_month,
+        revision=import_batch.dataset_revision,
         total_rows=import_batch.total_rows,
         created_rows=import_batch.created_rows,
         matched_rows=import_batch.matched_rows,
@@ -677,6 +702,16 @@ def _quality_alerts(
             count=counts.products_without_snapshot,
             title="Products without snapshots",
             description="Tracked products do not have a valid latest immutable snapshot.",
+        ),
+        DataQualityAlertResponse(
+            id="observation_date_unconfirmed",
+            severity="error",
+            count=counts.unconfirmed_observation_date,
+            title="Unconfirmed observation date",
+            description=(
+                "Legacy snapshots without a confirmed market date are excluded from current "
+                "portfolio decisions."
+            ),
         ),
         DataQualityAlertResponse(
             id="missing_buy_box_price",

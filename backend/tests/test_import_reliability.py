@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from openpyxl import Workbook
 from sqlalchemy import Engine, func, select
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
@@ -94,6 +94,58 @@ def test_operational_error_retry_classifier_is_closed_and_driver_aware() -> None
 
 
 @pytest.mark.anyio
+async def test_dataset_revision_conflict_is_retryable_and_preserves_pending_evidence(
+    test_engine: Engine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    testing_session = sessionmaker(bind=test_engine, autoflush=False, expire_on_commit=False)
+    organisation_id, marketplace_id = _create_workspace(testing_session)
+    upload_directory = tmp_path / "uploads"
+    settings = Settings(database_url="sqlite://", upload_directory=upload_directory)
+    app = _configure_app(testing_session, settings)
+    workbook = _workbook_bytes(
+        [["ASIN", "Title"], ["B000RACE01", "Synthetic revision race product"]]
+    )
+    scope = {"organisation_id": organisation_id, "marketplace_id": marketplace_id}
+
+    def raise_revision_conflict(*_args: object, **_kwargs: object) -> None:
+        original = sqlite3.IntegrityError(
+            "UNIQUE constraint failed: import_batches.organisation_id, "
+            "import_batches.marketplace_id, import_batches.dataset_schema_id, "
+            "import_batches.period_month, import_batches.dataset_revision"
+        )
+        raise IntegrityError("synthetic statement", {}, original)
+
+    monkeypatch.setattr(import_service, "_persist_rows", raise_revision_conflict)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        upload = await client.post(
+            "/api/v1/imports",
+            data=scope,
+            files={"file": ("revision-race.xlsx", workbook, "application/octet-stream")},
+        )
+        assert upload.status_code == 201
+        import_id = upload.json()["id"]
+        confirmation = await client.post(
+            f"/api/v1/imports/{import_id}/confirm",
+            params=scope,
+            json={"observed_on": "2026-01-15"},
+        )
+
+    assert confirmation.status_code == 503
+    assert confirmation.json()["error"]["code"] == "import_dataset_revision_retryable"
+    with testing_session() as session:
+        batch = session.get(ImportBatch, import_id)
+        assert batch is not None
+        assert batch.status.value == "pending"
+        assert batch.storage_key is not None
+        assert (upload_directory / batch.storage_key).is_file()
+        assert batch.observed_on is None
+        assert session.scalar(select(func.count(ProductSnapshot.id))) == 0
+
+
+@pytest.mark.anyio
 async def test_locked_sqlite_confirmation_is_retryable_and_preserves_staged_import(
     tmp_path: Path,
 ) -> None:
@@ -136,7 +188,7 @@ async def test_locked_sqlite_confirmation_is_retryable_and_preserves_staged_impo
             confirmation = await client.post(
                 f"/api/v1/imports/{import_id}/confirm",
                 params=scope,
-                json={},
+                json={"observed_on": "2026-01-15"},
             )
 
             assert confirmation.status_code == 503
@@ -161,7 +213,7 @@ async def test_locked_sqlite_confirmation_is_retryable_and_preserves_staged_impo
             retried = await client.post(
                 f"/api/v1/imports/{import_id}/confirm",
                 params=scope,
-                json={},
+                json={"observed_on": "2026-01-15"},
             )
             assert retried.status_code == 200, retried.text
             assert retried.json()["status"] == "completed"
@@ -221,7 +273,7 @@ async def test_wide_import_preserves_exact_raw_evidence_with_bounded_chunk_flush
         confirmation = await client.post(
             f"/api/v1/imports/{upload.json()['id']}/confirm",
             params=scope,
-            json={},
+            json={"observed_on": "2026-01-15"},
         )
 
     assert confirmation.status_code == 200, confirmation.text
@@ -314,7 +366,7 @@ async def test_unknown_operational_error_is_non_retryable_redacted_and_preserves
         confirmation = await client.post(
             f"/api/v1/imports/{import_id}/confirm",
             params=scope,
-            json={},
+            json={"observed_on": "2026-01-15"},
         )
 
     assert confirmation.status_code == 500
@@ -380,7 +432,7 @@ async def test_completed_cleanup_failure_is_nonfatal_retained_and_replayable(
         confirmation = await client.post(
             f"/api/v1/imports/{import_id}/confirm",
             params=scope,
-            json={},
+            json={"observed_on": "2026-01-15"},
         )
 
         assert confirmation.status_code == 200
@@ -396,7 +448,7 @@ async def test_completed_cleanup_failure_is_nonfatal_retained_and_replayable(
         replay = await client.post(
             f"/api/v1/imports/{import_id}/confirm",
             params=scope,
-            json={},
+            json={"observed_on": "2026-01-15"},
         )
 
     assert replay.status_code == 200
@@ -454,7 +506,9 @@ async def test_failed_import_cleanup_retains_reference_until_replayed(
         monkeypatch.setattr(import_service, "_persist_rows", fail_processing)
         monkeypatch.setattr(Path, "unlink", fail_staged_unlink)
         failed_response = await client.post(
-            f"/api/v1/imports/{import_id}/confirm", params=scope, json={}
+            f"/api/v1/imports/{import_id}/confirm",
+            params=scope,
+            json={"observed_on": "2026-01-15"},
         )
 
         assert failed_response.status_code == 422
@@ -466,7 +520,11 @@ async def test_failed_import_cleanup_retains_reference_until_replayed(
         assert staged_path.is_file()
 
         monkeypatch.setattr(Path, "unlink", original_unlink)
-        replay = await client.post(f"/api/v1/imports/{import_id}/confirm", params=scope, json={})
+        replay = await client.post(
+            f"/api/v1/imports/{import_id}/confirm",
+            params=scope,
+            json={"observed_on": "2026-01-15"},
+        )
 
     assert replay.status_code == 409
     assert not staged_path.exists()

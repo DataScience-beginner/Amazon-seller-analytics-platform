@@ -207,7 +207,15 @@ class SourcingService:
                     "offer_currency_code": offer.currency_code,
                 },
             )
-        snapshot = self._repository.latest_snapshot(product)
+        latest_snapshot = self._repository.latest_snapshot(product)
+        observation_date_unconfirmed = (
+            latest_snapshot is not None and latest_snapshot.observed_on is None
+        )
+        snapshot = (
+            latest_snapshot
+            if latest_snapshot is not None and latest_snapshot.observed_on is not None
+            else None
+        )
         confidence = self._repository.latest_confidence_score(
             snapshot.id if snapshot is not None else None
         )
@@ -257,6 +265,11 @@ class SourcingService:
             if invalid_monthly_demand
             else result.reason_codes
         )
+        if observation_date_unconfirmed:
+            notice_reason_codes = (
+                *notice_reason_codes,
+                "TEST_BUY_OBSERVATION_DATE_UNCONFIRMED",
+            )
         notice_models = _test_buy_notices(notice_reason_codes, demand_exists=demand_is_valid)
         evidence_model = TestBuyEvidenceResponse(
             source_snapshot_id=snapshot.id if snapshot is not None else None,
@@ -266,6 +279,7 @@ class SourcingService:
                 "keepa_monthly_sold" if raw_monthly_demand is not None else None
             ),
             market_snapshot_at=snapshot.snapshot_at if snapshot is not None else None,
+            market_observed_on=snapshot.observed_on if snapshot is not None else None,
             data_confidence_score_result_id=confidence.id if confidence is not None else None,
             data_confidence_score=confidence.score_value if confidence is not None else None,
             data_confidence_label="calculated" if confidence is not None else None,
@@ -408,6 +422,14 @@ def _test_buy_notices(
             "missing",
             "A calculated data-confidence score is required.",
             "calculated",
+        ),
+        "TEST_BUY_OBSERVATION_DATE_UNCONFIRMED": (
+            "missing",
+            (
+                "The latest legacy snapshot has no user-confirmed market observation date "
+                "and was excluded from this recommendation."
+            ),
+            "estimated",
         ),
         "TEST_BUY_BUDGET_ZERO": (
             "warning",

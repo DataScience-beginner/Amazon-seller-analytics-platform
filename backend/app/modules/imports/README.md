@@ -1,6 +1,6 @@
 # Keepa import kernel
 
-This package is the deterministic, framework-independent boundary for SOS-101 and SOS-102. It
+This package is the deterministic, framework-independent boundary for SOS-101 through SOS-103. It
 inspects an OOXML `.xlsx` workbook, detects its Keepa header row, maps source columns through a
 versioned alias registry, and returns typed preview and row objects. It does not write to the
 database, choose an organisation or marketplace, or decide whether an import transaction commits.
@@ -19,6 +19,12 @@ The supported entry points are exported from `app.modules.imports`:
 - `iter_workbook_rows(source, inspection, registry, limits=...)` streams parsed rows after verifying
   that the workbook checksum, headers and registry identity/version still match the preview.
 - `read_workbook_rows(...)` is the bounded materializing convenience used by tests and small callers.
+- `ProductFinderDatasetSchema.default()` loads the immutable
+  `keepa_product_finder.v1.json` 173-header source-model manifest.
+- `ProductFinderDatasetSchema.inspect(columns)` classifies the source as exact, compatible or
+  unregistered and returns source/schema checksums without changing canonical alias mapping.
+- `observation_date_candidates(...)` and `suggest_observed_on(...)` expose worksheet/filename date
+  evidence. A suggestion exists only when every candidate agrees.
 
 `source` is either immutable workbook bytes or a `Path`. Mapping ordinals are one-based, matching
 Excel column positions. An explicit mapping value selects a canonical field; `None` explicitly
@@ -28,6 +34,13 @@ kernel never chooses between them. Two explicit claims on one canonical field ar
 Every mapping carries a stable classification and reason code. Callers must persist the registry
 identifier/version and each source ordinal, source header, selected target or explicit-ignore
 decision with the import batch. This makes later reprocessing and AI-assisted diagnosis auditable.
+
+Source-schema classification and canonical alias mapping are separate axes. A header may be a
+registered Product Finder field even when SellerOS does not map it into a canonical decision field.
+Such a value is still retained in the snapshot source payload. Exact schema matching compares the
+normalised header multiset, independent of column order. Compatible matching requires ASIN and at
+least 80% registered-header coverage; weaker dynamic exports receive an explicit
+`keepa.unregistered` identity with a version derived from the actual header checksum.
 
 ## Workbook and value semantics
 
@@ -50,13 +63,16 @@ decision with the import batch. This makes later reprocessing and AI-assisted di
 The HTTP upload adapter remains responsible for filename, extension, media-type and configured
 request-size checks. The application service remains responsible for idempotency by organisation,
 marketplace and checksum, transactional status changes, row-error persistence and immutable snapshot
-creation.
+creation. It also requires a user-confirmed observation date, assigns a calendar-month revision and
+stores every source cell as ordinal/header/value evidence. Upload or processing time must never be
+used as the observation date.
 
 ## Registry changes
 
-Alias registry files are append-only contracts. Change aliases by adding a new registry resource and
-version rather than silently changing the meaning of a completed import. Cross-field alias collisions
-are permitted intentionally: they appear as ambiguous mappings that require an explicit decision.
+Alias registry and source-schema files are append-only contracts. Change aliases or the registered
+source model by adding a new resource and version rather than silently changing the meaning of a
+completed import. Cross-field alias collisions are permitted intentionally: they appear as ambiguous
+mappings that require an explicit decision.
 
 ## Example
 

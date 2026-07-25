@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -136,6 +136,7 @@ class ObservedPriceResponse(BaseModel):
     evidence_label: Literal["observed"] = "observed"
     source: Literal["keepa_import"] = "keepa_import"
     source_at: datetime
+    observed_on: date | None
 
 
 class CostProfileResponse(BaseModel):

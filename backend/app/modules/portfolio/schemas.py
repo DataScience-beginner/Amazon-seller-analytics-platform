@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal
@@ -33,6 +33,7 @@ class ProductSortField(StrEnum):
     price = "price"
     offer_count = "offer_count"
     snapshot_at = "snapshot_at"
+    observed_on = "observed_on"
     asin = "asin"
     product_title = "title"
     brand = "brand"
@@ -147,6 +148,7 @@ class SnapshotResponse(BaseModel):
     import_batch_id: str | None
     snapshot_kind: str
     snapshot_at: datetime
+    observed_on: date | None
     metrics: MarketMetricsResponse
     scores: list[ScoreResponse] = Field(default_factory=list)
     recommendation: RecommendationResponse | None = None
@@ -163,6 +165,7 @@ class ProductSummaryResponse(BaseModel):
     amazon_url: str | None
     latest_snapshot_id: str | None
     latest_snapshot_at: datetime | None
+    latest_observed_on: date | None
     buy_box_price: Decimal | None
     currency_code: str | None
     offer_count: int | None
@@ -229,6 +232,7 @@ class ProductIdentityResponse(BaseModel):
 class StrategyHistoryResponse(BaseModel):
     snapshot_id: str
     snapshot_at: datetime
+    observed_on: date | None
     strategy: Strategy
     confidence: ScoreValue
     rules_version: str
@@ -250,6 +254,9 @@ class LatestImportResponse(BaseModel):
     status: str
     uploaded_at: datetime
     completed_at: datetime | None
+    observed_on: date | None
+    period_month: date | None
+    revision: int | None
     total_rows: int
     created_rows: int
     matched_rows: int

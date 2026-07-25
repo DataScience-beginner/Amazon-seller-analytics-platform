@@ -133,16 +133,43 @@ class ImportBatch(Base):
             "checksum",
             name="uq_import_org_marketplace_checksum",
         ),
+        UniqueConstraint(
+            "organisation_id",
+            "marketplace_id",
+            "dataset_schema_id",
+            "period_month",
+            "dataset_revision",
+            name="uq_import_dataset_period_revision",
+        ),
         Index(
             "ix_import_batches_org_marketplace_uploaded",
             "organisation_id",
             "marketplace_id",
             "uploaded_at",
         ),
+        Index(
+            "ix_import_batches_org_marketplace_period",
+            "organisation_id",
+            "marketplace_id",
+            "dataset_schema_id",
+            "period_month",
+        ),
         CheckConstraint("file_size_bytes >= 0", name="ck_import_file_size_nonnegative"),
+        CheckConstraint("source_column_count >= 0", name="ck_import_source_columns_nonnegative"),
         CheckConstraint(
             "header_row_number IS NULL OR header_row_number >= 1",
             name="ck_import_header_row_positive",
+        ),
+        CheckConstraint(
+            "dataset_revision IS NULL OR dataset_revision >= 1",
+            name="ck_import_dataset_revision_positive",
+        ),
+        CheckConstraint(
+            "(observed_on IS NULL AND period_month IS NULL "
+            "AND dataset_revision IS NULL AND observed_on_source IS NULL) OR "
+            "(observed_on IS NOT NULL AND period_month IS NOT NULL "
+            "AND dataset_revision IS NOT NULL AND observed_on_source IS NOT NULL)",
+            name="ck_import_observation_metadata_complete",
         ),
         CheckConstraint(
             "total_rows >= 0 AND created_rows >= 0 AND matched_rows >= 0 "
@@ -167,6 +194,21 @@ class ImportBatch(Base):
     workbook_sheet_name: Mapped[str | None] = mapped_column(String(255))
     header_row_number: Mapped[int | None] = mapped_column(Integer)
     alias_registry_version: Mapped[str | None] = mapped_column(String(80))
+    dataset_schema_id: Mapped[str | None] = mapped_column(String(80))
+    dataset_schema_version: Mapped[str | None] = mapped_column(String(80))
+    dataset_schema_match: Mapped[str | None] = mapped_column(String(32))
+    dataset_schema_checksum: Mapped[str | None] = mapped_column(String(64))
+    source_header_checksum: Mapped[str | None] = mapped_column(String(64))
+    source_column_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    observed_on_suggestion: Mapped[date | None] = mapped_column(Date)
+    observation_suggestion_source: Mapped[str | None] = mapped_column(String(32))
+    observation_date_candidates: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    observed_on: Mapped[date | None] = mapped_column(Date)
+    observed_on_source: Mapped[str | None] = mapped_column(String(32))
+    period_month: Mapped[date | None] = mapped_column(Date)
+    dataset_revision: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[ImportStatus] = mapped_column(
         SAEnum(ImportStatus), default=ImportStatus.pending, nullable=False
     )
@@ -289,6 +331,7 @@ class ProductSnapshot(Base):
     __table_args__ = (
         UniqueConstraint("import_batch_id", "product_id", name="uq_snapshot_import_batch_product"),
         Index("ix_snapshots_product_taken_at", "product_id", "snapshot_at"),
+        Index("ix_snapshots_product_observed_on", "product_id", "observed_on"),
         CheckConstraint(
             "buy_box_oos_percentage_90d IS NULL OR "
             "(buy_box_oos_percentage_90d >= 0 AND buy_box_oos_percentage_90d <= 100)",
@@ -307,6 +350,8 @@ class ProductSnapshot(Base):
         SAEnum(SnapshotKind), default=SnapshotKind.keepa, nullable=False
     )
     snapshot_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    observed_on: Mapped[date | None] = mapped_column(Date)
+    observed_on_source: Mapped[str | None] = mapped_column(String(32))
     title: Mapped[str | None] = mapped_column(String(1000))
     brand: Mapped[str | None] = mapped_column(String(255))
     category: Mapped[str | None] = mapped_column(String(255))
@@ -328,6 +373,7 @@ class ProductSnapshot(Base):
     image_url: Mapped[str | None] = mapped_column(String(2000))
     amazon_url: Mapped[str | None] = mapped_column(String(2000))
     market_metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    source_payload: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
     source_row_number: Mapped[int | None] = mapped_column(Integer)
 
     product: Mapped[Product] = relationship(back_populates="snapshots", foreign_keys=[product_id])

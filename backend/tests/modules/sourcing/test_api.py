@@ -80,6 +80,8 @@ def _workspace(
         id=f"snapshot-{product_id}",
         product=product,
         snapshot_at=datetime(2026, 5, 1, tzinfo=UTC),
+        observed_on=datetime(2026, 5, 1, tzinfo=UTC).date(),
+        observed_on_source="user_confirmed",
         monthly_sold=monthly_demand,
     )
     session.add_all([organisation, marketplace, product, snapshot])
@@ -488,6 +490,52 @@ def test_missing_demand_persists_blocked_provenance_without_estimated_label(
     assert record.source_snapshot_id == f"snapshot-{product.id}"
     assert record.data_confidence_score_result_id is not None
     assert record.evidence["monthly_demand_label"] is None
+
+
+def test_legacy_undated_snapshot_is_excluded_from_test_buy_evidence(
+    db_session: Session,
+) -> None:
+    organisation, marketplace, product = _workspace(
+        db_session,
+        organisation_id="sourcing-org-undated",
+        marketplace_id="sourcing-market-undated",
+        product_id="sourcing-product-undated",
+    )
+    legacy_snapshot = ProductSnapshot(
+        id=f"legacy-snapshot-{product.id}",
+        product=product,
+        snapshot_at=datetime(2026, 5, 3, tzinfo=UTC),
+        monthly_sold=500,
+    )
+    db_session.add(legacy_snapshot)
+    db_session.flush()
+    product.latest_snapshot_id = legacy_snapshot.id
+    db_session.commit()
+    scope = {"organisation_id": organisation.id, "marketplace_id": marketplace.id}
+
+    with _client(db_session) as client:
+        offer = client.post(
+            "/api/v1/supplier-offers", params=scope, json=_offer_payload(product.id)
+        )
+        response = client.post(
+            f"/api/v1/products/{product.id}/test-buy-scenarios",
+            params=scope,
+            json={
+                "supplier_offer_id": offer.json()["id"],
+                "budget_amount": "1000.00",
+                "budget_currency_code": "INR",
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["outcome"] == "blocked"
+    assert payload["evidence"]["source_snapshot_id"] is None
+    assert payload["evidence"]["market_observed_on"] is None
+    assert payload["evidence"]["monthly_demand_units"] is None
+    assert "TEST_BUY_OBSERVATION_DATE_UNCONFIRMED" in {
+        notice["code"] for notice in payload["notices"]
+    }
 
 
 def test_missing_confidence_has_no_calculated_evidence_label(db_session: Session) -> None:

@@ -176,6 +176,19 @@ class EconomicsService:
         )
         observed_price = _observed_price(snapshot)
         notices: list[EconomicsNoticeResponse] = []
+        observation_date_unconfirmed = snapshot is not None and snapshot.observed_on is None
+        if observation_date_unconfirmed:
+            notices.append(
+                EconomicsNoticeResponse(
+                    code="ECONOMICS_OBSERVATION_DATE_UNCONFIRMED",
+                    severity="missing",
+                    message=(
+                        "The latest legacy snapshot has no user-confirmed market observation "
+                        "date and was excluded from economics."
+                    ),
+                    evidence_label="observed",
+                )
+            )
         calculation: EconomicsCalculationResponse | None = None
         if profile is None:
             notices.append(
@@ -189,14 +202,17 @@ class EconomicsService:
         else:
             selling_price: Decimal | None = None
             if observed_price is None:
-                notices.append(
-                    EconomicsNoticeResponse(
-                        code="ECONOMICS_SELLING_PRICE_MISSING",
-                        severity="missing",
-                        message="The latest snapshot has no observed selling price and currency.",
-                        evidence_label="observed",
+                if not observation_date_unconfirmed:
+                    notices.append(
+                        EconomicsNoticeResponse(
+                            code="ECONOMICS_SELLING_PRICE_MISSING",
+                            severity="missing",
+                            message=(
+                                "The latest snapshot has no observed selling price and currency."
+                            ),
+                            evidence_label="observed",
+                        )
                     )
-                )
             elif observed_price.amount < 0:
                 notices.append(
                     EconomicsNoticeResponse(
@@ -341,12 +357,18 @@ def _profile_response(profile: CostProfile) -> CostProfileResponse:
 
 
 def _observed_price(snapshot: ProductSnapshot | None) -> ObservedPriceResponse | None:
-    if snapshot is None or snapshot.buy_box_price is None or snapshot.currency_code is None:
+    if (
+        snapshot is None
+        or snapshot.observed_on is None
+        or snapshot.buy_box_price is None
+        or snapshot.currency_code is None
+    ):
         return None
     return ObservedPriceResponse(
         amount=snapshot.buy_box_price,
         currency_code=snapshot.currency_code,
         source_at=snapshot.snapshot_at,
+        observed_on=snapshot.observed_on,
     )
 
 

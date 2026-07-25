@@ -51,6 +51,24 @@ def test_alembic_upgrade_and_downgrade(tmp_path: Path) -> None:
         "evidence",
         "outcome",
     }.issubset(test_buy_columns)
+    import_columns = {column["name"] for column in inspector.get_columns("import_batches")}
+    assert {
+        "dataset_schema_id",
+        "dataset_schema_version",
+        "dataset_schema_match",
+        "dataset_schema_checksum",
+        "source_header_checksum",
+        "source_column_count",
+        "observation_date_candidates",
+        "observed_on_suggestion",
+        "observation_suggestion_source",
+        "observed_on",
+        "observed_on_source",
+        "period_month",
+        "dataset_revision",
+    }.issubset(import_columns)
+    snapshot_columns = {column["name"] for column in inspector.get_columns("product_snapshots")}
+    assert {"observed_on", "observed_on_source", "source_payload"}.issubset(snapshot_columns)
     engine.dispose()
 
     subprocess.run(

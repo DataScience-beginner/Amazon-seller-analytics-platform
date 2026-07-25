@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import FastAPI, Request
@@ -124,6 +124,7 @@ def _add_product(
     overall_score: int,
     confidence: int,
     strategy: str,
+    observed_on: date | None = date(2026, 1, 1),
 ) -> Product:
     product = Product(
         id=product_id,
@@ -140,6 +141,8 @@ def _add_product(
         id=f"snapshot-{product_id}",
         product=product,
         snapshot_at=datetime(2026, 1, 1, tzinfo=UTC),
+        observed_on=observed_on,
+        observed_on_source="user_confirmed" if observed_on is not None else None,
         buy_box_price=Decimal(price),
         buy_box_price_90d=Decimal(price),
         currency_code="INR",
@@ -170,6 +173,59 @@ def _add_product(
     )
     session.flush()
     return product
+
+
+def test_legacy_undated_evidence_is_browsable_but_excluded_from_current_decisions(
+    db_session: Session,
+) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-undated",
+        marketplace_id="marketplace-undated",
+        code="IN",
+    )
+    product = _add_product(
+        db_session,
+        product_id="product-undated",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000UND001",
+        title="Synthetic undated legacy product",
+        brand="Synthetic",
+        category="Legacy",
+        price="100.00",
+        offers=2,
+        overall_score=90,
+        confidence=90,
+        strategy="test_buy",
+        observed_on=None,
+    )
+    db_session.commit()
+    scope = {
+        "organisation_id": organisation.id,
+        "marketplace_id": marketplace.id,
+    }
+
+    with _api_client(db_session) as client:
+        dashboard = client.get("/api/v1/dashboard", params=scope)
+        products = client.get("/api/v1/products", params=scope)
+        detail = client.get(f"/api/v1/products/{product.id}", params=scope)
+
+    assert dashboard.status_code == 200
+    dashboard_payload = dashboard.json()
+    assert dashboard_payload["tracked_product_count"] == 1
+    assert dashboard_payload["top_opportunities"] == []
+    assert dashboard_payload["top_risks"] == []
+    assert sum(item["count"] for item in dashboard_payload["strategy_distribution"]) == 0
+    assert "observation_date_unconfirmed" in {
+        alert["id"] for alert in dashboard_payload["data_quality_alerts"]
+    }
+
+    item = products.json()["items"][0]
+    assert item["latest_observed_on"] is None
+    assert item["strategy"] is None
+    assert "observation_date_unconfirmed" in item["data_quality_codes"]
+    assert "observation_date_unconfirmed" in {notice["code"] for notice in detail.json()["notices"]}
 
 
 def test_empty_dashboard_is_scoped_and_actionable(db_session: Session) -> None:

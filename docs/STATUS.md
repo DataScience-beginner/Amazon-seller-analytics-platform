@@ -31,6 +31,12 @@ coverage. It does not mean production SaaS readiness.
 Local frontend development uses a same-origin `/api` contract with Vite proxying to the backend on
 `127.0.0.1:8000`. This keeps GitHub Codespaces private-port authentication outside browser API calls.
 
+The repository includes a Railway founder-preview image that builds and serves the React SPA from
+FastAPI, migrates a separate PostgreSQL service, binds to Railway's assigned port and fails closed
+without an interim whole-application preview login. This does not change the production boundary:
+user identity and enforced request-principal tenant authorisation remain required before customer or
+public SaaS access.
+
 ## Dated Keepa dataset evidence
 
 The registered `keepa.product_finder` v1.0.0 source model contains 173 headers. The reference export

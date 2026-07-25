@@ -1,12 +1,16 @@
+import base64
+import binascii
 import logging
+import secrets
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -39,6 +43,52 @@ class CorrelationIdMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_correlation_id)
+
+
+class PreviewBasicAuthMiddleware:
+    """Protect the temporary hosted preview until tenant authentication exists."""
+
+    def __init__(self, app: ASGIApp, *, username: str, password: str) -> None:
+        self.app = app
+        self.username = username
+        self.password = password
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] == "/api/v1/health":
+            await self.app(scope, receive, send)
+            return
+        headers = {key.lower(): value for key, value in scope.get("headers", [])}
+        authorization = headers.get(b"authorization", b"").decode("latin-1")
+        supplied_username, supplied_password = _basic_credentials(authorization)
+        if not (
+            secrets.compare_digest(supplied_username, self.username)
+            and secrets.compare_digest(supplied_password, self.password)
+        ):
+            response = JSONResponse(
+                status_code=401,
+                content={
+                    "error": {
+                        "code": "preview_authentication_required",
+                        "message": "SellerOS preview authentication is required",
+                    }
+                },
+                headers={"WWW-Authenticate": 'Basic realm="SellerOS Preview"'},
+            )
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+def _basic_credentials(authorization: str) -> tuple[str, str]:
+    scheme, _, encoded = authorization.partition(" ")
+    if scheme.casefold() != "basic" or not encoded:
+        return "", ""
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError):
+        return "", ""
+    username, separator, password = decoded.partition(":")
+    return (username, password) if separator else ("", "")
 
 
 def _correlation_id(request: Request) -> str:
@@ -92,6 +142,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(CorrelationIdMiddleware)
+    if settings.preview_basic_auth_username and settings.preview_basic_auth_password:
+        app.add_middleware(
+            PreviewBasicAuthMiddleware,
+            username=settings.preview_basic_auth_username,
+            password=settings.preview_basic_auth_password,
+        )
     app.include_router(api_router)
 
     @app.exception_handler(ApplicationError)
@@ -153,7 +209,27 @@ def create_app() -> FastAPI:
             message="Internal server error",
         )
 
+    _mount_frontend(app, settings.frontend_dist_directory)
     return app
+
+
+def _mount_frontend(app: FastAPI, frontend_directory: Path | None) -> None:
+    """Serve built same-origin assets after API/docs routes when a build is configured."""
+    if frontend_directory is None:
+        return
+    root = frontend_directory.resolve()
+    index = root / "index.html"
+    if not index.is_file():
+        raise RuntimeError(f"FRONTEND_DIST_DIRECTORY does not contain an index.html: {root}")
+
+    @app.get("/{frontend_path:path}", include_in_schema=False)
+    async def frontend(frontend_path: str) -> FileResponse:
+        if frontend_path == "api" or frontend_path.startswith("api/"):
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+        candidate = (root / frontend_path).resolve()
+        if candidate.is_relative_to(root) and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
 
 
 app = create_app()

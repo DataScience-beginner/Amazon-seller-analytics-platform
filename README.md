@@ -118,6 +118,15 @@ docker compose up -d postgres
 
 Then set `DATABASE_URL` to the PostgreSQL SQLAlchemy URL and run `alembic upgrade head`.
 
+## Railway founder preview
+
+The root multi-stage Dockerfile builds the frontend and backend into one same-origin Railway image.
+It runs migrations before startup, binds to Railway's assigned port, normalises Railway PostgreSQL
+URLs for psycopg 3, serves React route fallbacks and requires a fail-closed preview username/password
+in production. Follow [the exact Railway setup](docs/RAILWAY_DEPLOYMENT.md). This access lock is for a
+controlled founder preview; final user authentication and tenant authorisation remain required before
+public SaaS use.
+
 ## Quality checks
 
 Backend:

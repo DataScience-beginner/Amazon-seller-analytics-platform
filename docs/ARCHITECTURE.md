@@ -33,15 +33,24 @@ microservices, queues or distributed consistency during the MVP.
    server-generated staging key.
 2. The workbook kernel validates the OOXML archive, blocks unsafe embedded content, detects the
    worksheet/header and returns a bounded preview using `data_only=True`.
-3. A versioned alias registry maps by normalised header text, never fixed positions. Ambiguity stays
+3. A versioned source-schema manifest classifies the Keepa Product Finder v1 header set independently
+   from the alias registry. Exact matching is order-independent after normalisation; compatible
+   matching requires ASIN plus at least 80% registered-header coverage. The source-schema and actual
+   header checksums are stored.
+4. A versioned alias registry maps canonical decision fields by normalised header text, never fixed
+   positions. Registered-but-not-canonical fields remain preserved evidence. Ambiguity stays
    unresolved until an explicit one-based ordinal decision is stored.
-4. The database enforces idempotency by organisation + marketplace + SHA-256 checksum.
-5. Confirmation revalidates checksum, headers and registry version, then creates products,
-   snapshots, raw attributes, score cards, strategy evidence, row errors and audit metadata in one
+5. Inspection reports every date detected in the worksheet name and original filename. It suggests a
+   date only when candidates agree. Confirmation requires the seller to submit `observed_on`;
+   upload/processing time is never used as market-evidence time.
+6. The database enforces idempotency by organisation + marketplace + SHA-256 checksum.
+7. Confirmation revalidates checksum, headers and registry version, assigns the calendar-month period
+   and next append-only revision, then creates products, dated snapshots, complete source payloads,
+   raw exception attributes, score cards, strategy evidence, row errors and audit metadata in one
    database transaction using bounded snapshot flush chunks.
-6. A fatal failure rolls back domain writes and marks the import failed separately. Expected bad rows
+8. A fatal failure rolls back domain writes and marks the import failed separately. Expected bad rows
    are reported explicitly while valid unique-ASIN rows commit together.
-7. Staged workbook content is removed after completion or terminal failure.
+9. Staged workbook content is removed after completion or terminal failure.
 
 Known retryable database failures roll back the transaction and return a stable 503 while retaining
 the pending batch and staged workbook. Unknown operational database faults return a stable,
@@ -51,6 +60,12 @@ timeout; PostgreSQL remains the production-compatible concurrency target.
 
 Import states are intentionally small: `pending`, `completed`, `failed`. A completed confirmation and
 a repeated checksum are idempotent reads, not new snapshots.
+
+Several different files may represent the same schema and month. They are retained as revision 1,
+revision 2 and so on under organisation + marketplace + schema + period. A concurrent revision-number
+collision fails retryably rather than overwriting evidence. Product latest pointers compare
+`observed_on` first and revision only when observation dates match, so a late upload of an older
+month cannot replace newer market evidence.
 
 ## Economics and sourcing transactions
 
@@ -73,6 +88,10 @@ a repeated checksum are idempotent reads, not new snapshots.
 
 - Product identity is unique by organisation, marketplace and ASIN.
 - A completed import creates at most one snapshot per product.
+- A confirmed import has a seller-confirmed `observed_on`, first-of-month `period_month`, positive
+  revision and source-schema identity. Those fields are assigned together.
+- Each new snapshot preserves every source cell as ordered ordinal/header/value evidence, including
+  blanks and registered fields not currently mapped to canonical decision fields.
 - ProductSnapshot scalar columns and persisted raw/score/recommendation evidence cannot be updated or
   deleted through the ORM. Corrections create new versioned evidence.
 - Unknown values and malformed mapped values are stored by source ordinal/header in RawAttribute;
@@ -92,6 +111,9 @@ a repeated checksum are idempotent reads, not new snapshots.
   are append-only through the ORM. A tier can only be inserted with its new parent offer. Required
   investment and all seller money use `Decimal`/`Numeric` with currency codes.
 - Imported snapshots never update cost profiles, supplier quotations, budgets or inventory.
+- Upload and processing timestamps are never used to order market evidence. Legacy snapshots without
+  an observation date remain unchanged and are excluded from current portfolio, economics and
+  sourcing decisions.
 
 ## Decision safety
 
@@ -150,7 +172,8 @@ code may import it or copy its architecture.
   or FX conversion policy exists. Missing fees or tax basis intentionally leave dependent outputs
   unavailable.
 - No seller/workspace timezone is modeled yet. Quotation calendar-date validation uses UTC and the UI
-  labels it; effective timestamps always carry an explicit offset.
+  labels it; dataset future-date validation also uses the UTC calendar date. Effective timestamps
+  always carry an explicit offset.
 - Keepa monthly sold is labelled Estimated and is not treated as observed order history.
 - Inventory, reorder, lifecycle, markdown and portfolio cash-flow workflows remain later phases.
 - Supplier attachments and purchase-order execution are out of scope; test-buy results are advisory.

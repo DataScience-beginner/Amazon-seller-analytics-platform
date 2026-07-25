@@ -109,6 +109,14 @@
 - Products are matched by organisation, marketplace and ASIN.
 - A new ProductSnapshot is created for every valid imported product.
 - Previous snapshots remain unchanged.
+- Confirmation requires an explicit seller-confirmed observation date; upload and processing
+  timestamps never substitute for source evidence time.
+- Each completed import records its source-schema identity/version/checksum, source-header checksum,
+  calendar-month period and append-only revision.
+- Every source cell is preserved by one-based ordinal, original header and JSON-safe value, including
+  registered fields that SellerOS does not yet use in calculations.
+- Repeated files for the same dataset month create ordered revisions rather than overwriting prior
+  evidence. Product “latest” state follows observation date, then same-date revision—not upload time.
 - New ASINs create products.
 - Missing ASINs are recorded as row errors unless an approved fallback exists.
 - Re-uploading the same file checksum is idempotent and does not duplicate snapshots.

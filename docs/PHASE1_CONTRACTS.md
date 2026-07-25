@@ -3,8 +3,15 @@
 ## Import contract
 
 `POST /api/v1/imports` accepts multipart fields `file`, `organisation_id` and `marketplace_id`.
-Successful inspection returns a pending import with workbook metadata, mapping columns, missing fields
-and bounded preview rows. Source ordinals are one-based.
+Successful inspection returns a pending import with workbook metadata, source-dataset metadata,
+mapping columns, missing fields and bounded preview rows. Source ordinals are one-based.
+
+The `dataset` object reports the source schema ID/version/match, immutable schema checksum, actual
+header checksum, registered/matched/source column counts, new/missing headers, all detected date
+candidates and an optional date suggestion. `exact` means the normalised registered header multiset
+matches regardless of column order. `compatible` requires ASIN plus at least 80% registered-header
+coverage. Other dynamic exports remain importable as `keepa.unregistered`, with a schema version
+derived from the actual header checksum; their unknown fields are preserved.
 
 `GET /api/v1/imports/{id}`, `PUT /api/v1/imports/{id}/mapping` and
 `POST /api/v1/imports/{id}/confirm` require `organisation_id` and `marketplace_id` query parameters.
@@ -21,9 +28,22 @@ A string explicitly selects a canonical field; `null` explicitly ignores the sou
 canonical field cannot be explicitly selected twice. Confirmation is blocked while required fields
 are missing or any mapping is ambiguous.
 
-`POST /api/v1/imports/{id}/confirm` is idempotent. Its summary counts every nonblank workbook row
-exactly once across `created`, `matched`, `skipped` and `failed`. `row_error_count` includes warnings
-for malformed optional cells as well as blocking row errors.
+`POST /api/v1/imports/{id}/confirm` requires:
+
+```json
+{"observed_on": "2026-05-26"}
+```
+
+The UI may prefill a suggestion only when all ISO dates detected in the worksheet name and filename
+agree. The seller must review the date and explicitly confirm it. A future UTC date fails with
+`observed_on_in_future`. A completed import is idempotent for the same date and returns
+`import_observed_on_conflict` if a different date is submitted.
+
+Confirmation derives `period_month` as the first day of the confirmed month and assigns the next
+positive revision within organisation + marketplace + source schema + period. A revision race fails
+retryably with `import_dataset_revision_retryable`; it never overwrites the other import. The summary
+counts every nonblank workbook row exactly once across `created`, `matched`, `skipped` and `failed`.
+`row_error_count` includes warnings for malformed optional cells as well as blocking row errors.
 
 Snapshot evidence is flushed in bounded write chunks inside one outer transaction. This limits each
 ORM flush burst, not total process memory: confirmation currently materialises all inspected rows and
@@ -51,6 +71,16 @@ Stable import errors use:
 
 No stack trace, SQL detail or source row value is returned or logged.
 
+Each new `ProductSnapshot` stores the confirmed observation date and a complete `source_payload`
+array containing every source cell as `{ordinal, header, value}`. This includes blank values and the
+registered source fields that do not yet feed canonical calculations. `RawAttribute` remains the
+indexed exception view for unrecognised headers or malformed canonical values; it is not the only
+lossless store.
+
+Imports and snapshots completed before the dated-dataset contract retain null observation metadata
+and report `legacy_unconfirmed`. They are not silently backdated. They remain browsable as historical
+evidence but are excluded from current portfolio, economics and sourcing decisions.
+
 ## Portfolio query contract
 
 `GET /api/v1/products` requires organisation/marketplace scope and supports:
@@ -61,7 +91,9 @@ No stack trace, SQL detail or source row value is returned or logged.
 - `sort_by`, `sort_direction`, `page` and `page_size` (maximum 100).
 
 Range inversions fail validation. Sorting has a deterministic product-ID tie-breaker. Dashboard and
-product detail use the same latest-snapshot/latest-version semantics as the product collection.
+product detail use the same latest-snapshot/latest-version semantics as the product collection:
+confirmed observation date first, then same-date revision. Upload time never promotes an older
+dataset over newer market evidence.
 
 ## Score semantics
 

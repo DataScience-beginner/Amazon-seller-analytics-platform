@@ -8,7 +8,7 @@ Last verified implementation target: Phase 2, stories SOS-401 through SOS-502.
 | SOS-002 | Complete | Canonical tenant-aware domain model and data-separation tests |
 | SOS-101 | Complete | Bounded `.xlsx` staging, OOXML safety validation, checksum/status and safe errors |
 | SOS-102 | Complete | Versioned aliases, normalisation, ambiguity decisions, preview and unknown preservation |
-| SOS-103 | Complete | Transactional ASIN matching, immutable snapshots, idempotency, row errors and summary |
+| SOS-103 | Complete | Explicit observed date, versioned 173-column Keepa dataset identity, lossless source payloads, monthly revisions, transactional immutable snapshots and chronology-safe latest evidence |
 | SOS-201 | Complete | Five versioned 0–100 scores with persisted inputs, reasons and config checksum |
 | SOS-202 | Complete | Eight deterministic strategies, confidence gate, evidence and history |
 | SOS-301 | Complete | Tenant-scoped KPI dashboard, opportunities, risks, quality and first-use state |
@@ -24,6 +24,20 @@ coverage. It does not mean production SaaS readiness.
 
 Local frontend development uses a same-origin `/api` contract with Vite proxying to the backend on
 `127.0.0.1:8000`. This keeps GitHub Codespaces private-port authentication outside browser API calls.
+
+## Dated Keepa dataset evidence
+
+The registered `keepa.product_finder` v1.0.0 source model contains 173 headers. The reference export
+is classified as 21 canonical decision fields plus 152 registered fields preserved as source
+evidence. Inspection may suggest an observation date from an ISO date in the worksheet name or
+filename only when all detected candidates agree. Confirmation still requires an explicit
+seller-confirmed date.
+
+Completed imports are keyed to a calendar month and append-only revision. Every snapshot stores all
+source cells by ordinal/header/value. Portfolio, economics and sourcing choose evidence by confirmed
+observation date; upload and processing timestamps are operational metadata only. Historical
+snapshots created before this contract remain explicitly `legacy_unconfirmed`, are not rewritten,
+and are excluded from current decisions until new dated evidence is imported.
 
 ## Current quality gate
 

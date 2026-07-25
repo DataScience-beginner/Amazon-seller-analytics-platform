@@ -9,9 +9,12 @@ explainable market scores, traceable unit economics and advisory sourcing scenar
 Phase 1 stories SOS-101 through SOS-303 and Phase 2 stories SOS-401 through SOS-502 are implemented:
 
 - safe `.xlsx` staging, workbook inspection and preview;
+- registered Keepa Product Finder v1 source-model detection for all 173 headers;
+- seller-confirmed observation dates, monthly dataset revisions and chronology-safe latest evidence;
 - versioned alias mapping with explicit ambiguity handling;
 - organisation + marketplace + ASIN matching and checksum idempotency;
-- transactional immutable snapshots with row-level errors and unknown-field preservation;
+- transactional immutable snapshots with complete source-cell payloads, row-level errors and
+  unknown-field preservation;
 - deterministic Demand, Competition, Price Stability, Data Confidence and Overall Opportunity scores;
 - deterministic, versioned strategy recommendations with structured evidence;
 - tenant-scoped dashboard, server-filtered product portfolio and product evidence/history pages;
@@ -62,10 +65,12 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. On first use, create a local organisation/marketplace, open Imports,
-upload a Keepa `.xlsx`, review the detected mapping, then confirm it. Open Planning from a product to
-enter costs, compare supplier quotations and request advisory test-buy scenarios. Local uploads,
-databases and workbooks are ignored by Git. Never commit seller workbooks or imported business data.
+Open `http://localhost:5173`. On first use, create a local organisation/marketplace, open Imports and
+upload a Keepa `.xlsx`. Review the registered source-model result and mapping exceptions, confirm the
+date represented by the workbook, then create that monthly dataset. The observed date is separate
+from upload and processing time. Open Planning from a product to enter costs, compare supplier
+quotations and request advisory test-buy scenarios. Local uploads, databases and workbooks are
+ignored by Git. Never commit seller workbooks or imported business data.
 
 The frontend uses same-origin `/api` requests. During local development, Vite proxies those requests
 to `http://127.0.0.1:8000`; this also avoids private-port CORS redirects in GitHub Codespaces. Set
@@ -85,7 +90,7 @@ Health and interactive API documentation:
 | `GET`, `POST` | `/api/v1/imports` | List or upload tenant-scoped imports |
 | `GET` | `/api/v1/imports/{id}` | Mapping preview, status and summary |
 | `PUT` | `/api/v1/imports/{id}/mapping` | Store one-based source-column decisions |
-| `POST` | `/api/v1/imports/{id}/confirm` | Transactionally create snapshots, scores and recommendations |
+| `POST` | `/api/v1/imports/{id}/confirm` | Confirm observation date and transactionally create a monthly dataset |
 | `GET` | `/api/v1/dashboard` | Tenant-scoped executive portfolio |
 | `GET` | `/api/v1/products` | Search, filter, sort and paginate products |
 | `GET` | `/api/v1/products/{id}` | Latest evidence plus snapshot/strategy history |
@@ -159,6 +164,7 @@ Always inspect generated SQL and run the upgrade/downgrade test before committin
 - [Architecture and invariants](docs/ARCHITECTURE.md)
 - [Phase 1 API and decision contracts](docs/PHASE1_CONTRACTS.md)
 - [Phase 2 economics and sourcing contracts](docs/PHASE2_CONTRACTS.md)
+- [Keepa Product Finder dataset model v1](docs/KEEPA_DATASET_MODEL_V1.md)
 - [Product backlog](docs/IMPLEMENTATION_BACKLOG.md)
 - [Engineering guardrails](docs/ENGINEERING_GUARDRAILS.md)
 - [Competitive reference research](docs/competitive/README.md)

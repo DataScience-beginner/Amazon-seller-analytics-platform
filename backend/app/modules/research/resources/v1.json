@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "policy_version": "product-research-v1.0.0",
+  "avoid_overall_max": 39,
+  "evidence_confidence_min": 75,
+  "generic_brand_markers": [
+    "generic",
+    "unbranded",
+    "no brand",
+    "unknown",
+    "n/a",
+    "na"
+  ],
+  "screens": {
+    "priority_research": {
+      "label": "Priority research",
+      "description": "Strong demand, approachable competition, stable pricing and high confidence. Validate brand permission and sourcing next.",
+      "min_overall": 82,
+      "max_overall": null,
+      "min_demand": 85,
+      "min_competition": 80,
+      "min_price_stability": 80,
+      "min_data_confidence": 80,
+      "max_data_confidence": null,
+      "max_offer_count": 3,
+      "require_price": true
+    },
+    "promising": {
+      "label": "Promising",
+      "description": "Good market evidence with slightly broader thresholds for manual investigation.",
+      "min_overall": 75,
+      "max_overall": null,
+      "min_demand": 75,
+      "min_competition": 70,
+      "min_price_stability": 70,
+      "min_data_confidence": 75,
+      "max_data_confidence": null,
+      "max_offer_count": 5,
+      "require_price": true
+    },
+    "low_competition": {
+      "label": "Low seller competition",
+      "description": "Few current offers and a high competition score. This does not measure competing substitute products.",
+      "min_overall": null,
+      "max_overall": null,
+      "min_demand": null,
+      "min_competition": 90,
+      "min_price_stability": null,
+      "min_data_confidence": 75,
+      "max_data_confidence": null,
+      "max_offer_count": 2,
+      "require_price": true
+    },
+    "stable_pricing": {
+      "label": "Stable pricing",
+      "description": "High price-stability score with sufficient evidence and a current Buy Box price.",
+      "min_overall": null,
+      "max_overall": null,
+      "min_demand": null,
+      "min_competition": null,
+      "min_price_stability": 90,
+      "min_data_confidence": 75,
+      "max_data_confidence": null,
+      "max_offer_count": null,
+      "require_price": true
+    },
+    "needs_evidence": {
+      "label": "Needs evidence",
+      "description": "Low-confidence products that should not move to sourcing decisions yet.",
+      "min_overall": null,
+      "max_overall": null,
+      "min_demand": null,
+      "min_competition": null,
+      "min_price_stability": null,
+      "min_data_confidence": null,
+      "max_data_confidence": 74,
+      "max_offer_count": null,
+      "require_price": false
+    },
+    "all": {
+      "label": "All products",
+      "description": "The complete imported product universe with no research-policy threshold applied.",
+      "min_overall": null,
+      "max_overall": null,
+      "min_demand": null,
+      "min_competition": null,
+      "min_price_stability": null,
+      "min_data_confidence": null,
+      "max_data_confidence": null,
+      "max_offer_count": null,
+      "require_price": false
+    }
+  }
+}

@@ -124,6 +124,10 @@ def _add_product(
     overall_score: int,
     confidence: int,
     strategy: str,
+    demand_score: int = 85,
+    competition_score: int = 85,
+    price_stability_score: int = 85,
+    monthly_bought: int | None = None,
     observed_on: date | None = date(2026, 1, 1),
 ) -> Product:
     product = Product(
@@ -154,10 +158,20 @@ def _add_product(
         review_count=120,
         buy_box_winner_count_90d=2,
         buy_box_oos_percentage_90d=Decimal("2.5"),
+        source_payload=[
+            {
+                "ordinal": 11,
+                "header": "Monthly Sales Trends: Bought in past month",
+                "value": monthly_bought,
+            }
+        ],
     )
     session.add(snapshot)
     session.flush()
     product.latest_snapshot_id = snapshot.id
+    _add_score(session, snapshot, name="demand", value=demand_score)
+    _add_score(session, snapshot, name="competition", value=competition_score)
+    _add_score(session, snapshot, name="price_stability", value=price_stability_score)
     _add_score(session, snapshot, name="overall_opportunity", value=overall_score)
     _add_score(session, snapshot, name="data_confidence", value=confidence)
     session.add(
@@ -173,6 +187,92 @@ def _add_product(
     )
     session.flush()
     return product
+
+
+def test_research_screens_brand_filter_and_critical_metrics(db_session: Session) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-research",
+        marketplace_id="marketplace-research",
+        code="IN",
+    )
+    priority = _add_product(
+        db_session,
+        product_id="product-priority",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000PRIO01",
+        title="Synthetic priority candidate",
+        brand="Declared Brand",
+        category="Home",
+        price="1499.00",
+        offers=2,
+        overall_score=86,
+        confidence=90,
+        strategy="test_buy",
+        demand_score=90,
+        competition_score=92,
+        price_stability_score=88,
+        monthly_bought=700,
+    )
+    _add_product(
+        db_session,
+        product_id="product-generic",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000GENE01",
+        title="Synthetic generic monitor",
+        brand="Generic",
+        category="Home",
+        price="499.00",
+        offers=8,
+        overall_score=60,
+        confidence=80,
+        strategy="monitor",
+        demand_score=65,
+        competition_score=60,
+        price_stability_score=75,
+    )
+    db_session.commit()
+    scope = {
+        "organisation_id": organisation.id,
+        "marketplace_id": marketplace.id,
+    }
+
+    with _api_client(db_session) as client:
+        screened = client.get(
+            "/api/v1/products",
+            params={**scope, "screen": "priority_research"},
+        )
+        generic = client.get(
+            "/api/v1/products",
+            params={
+                **scope,
+                "screen": "all",
+                "brand_classification": "likely_generic",
+            },
+        )
+
+    assert screened.status_code == 200
+    payload = screened.json()
+    assert payload["pagination"]["total_items"] == 1
+    assert payload["items"][0]["product_id"] == priority.id
+    assert payload["items"][0]["research"]["status"] == "priority_research"
+    assert payload["items"][0]["research"]["brand_classification"] == "declared_brand"
+    assert payload["items"][0]["estimated_monthly_bought"] == 700
+    assert payload["items"][0]["demand_score"] == 90
+    assert payload["research_policy_version"] == "product-research-v1.0.0"
+    assert len(payload["research_configuration_checksum"]) == 64
+    assert {screen["id"] for screen in payload["screens"]} == {
+        "priority_research",
+        "promising",
+        "low_competition",
+        "stable_pricing",
+        "needs_evidence",
+        "all",
+    }
+    assert generic.json()["pagination"]["total_items"] == 1
+    assert generic.json()["items"][0]["research"]["brand_classification"] == "likely_generic"
 
 
 def test_legacy_undated_evidence_is_browsable_but_excluded_from_current_decisions(

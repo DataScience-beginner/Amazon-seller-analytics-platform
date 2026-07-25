@@ -54,7 +54,10 @@ async def test_workspace_bootstrap_is_disabled_by_default(test_engine: Engine) -
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_settings] = lambda: Settings(database_url="sqlite://")
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        database_url="sqlite://",
+        allow_unauthenticated_workspace_bootstrap=False,
+    )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/v1/workspaces")

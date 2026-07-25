@@ -15,6 +15,11 @@ from pydantic import (
     model_validator,
 )
 
+from app.modules.research.models import (
+    BrandClassification,
+    ResearchScreenId,
+    ResearchStatus,
+)
 from app.modules.strategies.models import Strategy
 
 ScopeId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=36)]
@@ -29,6 +34,9 @@ NonNegativeDecimal = Annotated[Decimal, Field(ge=0)]
 
 class ProductSortField(StrEnum):
     overall_opportunity = "overall_opportunity"
+    demand = "demand"
+    competition = "competition"
+    price_stability = "price_stability"
     data_confidence = "data_confidence"
     price = "price"
     offer_count = "offer_count"
@@ -55,6 +63,8 @@ class PortfolioScopeQuery(BaseModel):
 
 class ProductListQuery(PortfolioScopeQuery):
     search: SearchText | None = None
+    screen: ResearchScreenId = ResearchScreenId.all
+    brand_classification: BrandClassification | None = None
     strategy: Strategy | None = None
     category: CategoryText | None = None
     min_score: ScoreValue | None = None
@@ -140,6 +150,7 @@ class MarketMetricsResponse(BaseModel):
     buy_box_winner_count_90d: int | None
     buy_box_oos_percentage_90d: Decimal | None
     monthly_sold: int | None
+    estimated_monthly_bought: int | None
     is_fba: bool | None
 
 
@@ -152,6 +163,23 @@ class SnapshotResponse(BaseModel):
     metrics: MarketMetricsResponse
     scores: list[ScoreResponse] = Field(default_factory=list)
     recommendation: RecommendationResponse | None = None
+
+
+class ResearchAssessmentResponse(BaseModel):
+    status: ResearchStatus
+    brand_classification: BrandClassification
+    policy_version: str
+    configuration_checksum: str
+    reason_codes: list[str] = Field(default_factory=list)
+    positive_signals: list[str] = Field(default_factory=list)
+    risk_signals: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+
+
+class ResearchScreenResponse(BaseModel):
+    id: ResearchScreenId
+    label: str
+    description: str
 
 
 class ProductSummaryResponse(BaseModel):
@@ -167,14 +195,24 @@ class ProductSummaryResponse(BaseModel):
     latest_snapshot_at: datetime | None
     latest_observed_on: date | None
     buy_box_price: Decimal | None
+    buy_box_price_90d: Decimal | None
     currency_code: str | None
     offer_count: int | None
+    sales_rank: int | None
+    sales_rank_90d: int | None
+    estimated_monthly_bought: int | None
+    buy_box_winner_count_90d: int | None
+    buy_box_oos_percentage_90d: Decimal | None
+    demand_score: ScoreValue | None
+    competition_score: ScoreValue | None
+    price_stability_score: ScoreValue | None
     overall_opportunity_score: ScoreValue | None
     data_confidence_score: ScoreValue | None
     strategy: Strategy | None
     recommendation_confidence: ScoreValue | None
     score_formula_version: str | None
     strategy_rules_version: str | None
+    research: ResearchAssessmentResponse | None
     data_quality_codes: list[str] = Field(default_factory=list)
 
 
@@ -189,6 +227,8 @@ class PaginationResponse(BaseModel):
 
 class AppliedProductQueryResponse(BaseModel):
     search: str | None
+    screen: ResearchScreenId
+    brand_classification: BrandClassification | None
     strategy: Strategy | None
     category: str | None
     min_score: int | None
@@ -208,6 +248,9 @@ class ProductListResponse(BaseModel):
     items: list[ProductSummaryResponse]
     pagination: PaginationResponse
     query: AppliedProductQueryResponse
+    research_policy_version: str
+    research_configuration_checksum: str
+    screens: list[ResearchScreenResponse]
 
 
 class DataNoticeResponse(BaseModel):
@@ -242,6 +285,7 @@ class StrategyHistoryResponse(BaseModel):
 class ProductDetailResponse(BaseModel):
     scope: ScopeResponse
     product: ProductIdentityResponse
+    research: ResearchAssessmentResponse | None
     latest_snapshot: SnapshotResponse | None
     notices: list[DataNoticeResponse]
     snapshot_history: list[SnapshotResponse]

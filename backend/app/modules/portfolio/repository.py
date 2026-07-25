@@ -19,6 +19,8 @@ from app.models.domain import (
     StrategyRecommendation,
 )
 from app.modules.portfolio.schemas import ProductSortField, SortDirection
+from app.modules.research.models import BrandClassification
+from app.modules.research.policy import ResearchScreen
 from app.modules.strategies.models import Strategy
 
 
@@ -32,6 +34,9 @@ class PortfolioScope:
 class ProductQuerySpec:
     scope: PortfolioScope
     search: str | None = None
+    research_screen: ResearchScreen | None = None
+    brand_classification: BrandClassification | None = None
+    generic_brand_markers: frozenset[str] = frozenset()
     strategy: Strategy | None = None
     category: str | None = None
     min_score: int | None = None
@@ -53,6 +58,9 @@ class ProductQuerySpec:
 class ProductReadRecord:
     product: Product
     snapshot: ProductSnapshot | None
+    demand_score: ScoreResult | None
+    competition_score: ScoreResult | None
+    price_stability_score: ScoreResult | None
     overall_score: ScoreResult | None
     confidence_score: ScoreResult | None
     recommendation: StrategyRecommendation | None
@@ -86,6 +94,9 @@ class DataQualityCounts:
 class _ProjectionBundle:
     statement: Select[Any]
     snapshot: Any
+    demand_score: Any
+    competition_score: Any
+    price_stability_score: Any
     overall_score: Any
     confidence_score: Any
     recommendation: Any
@@ -409,6 +420,9 @@ class PortfolioRepository:
 
     def _build_product_projection(self, scope: PortfolioScope) -> _ProjectionBundle:
         snapshot = aliased(ProductSnapshot, name="latest_snapshot")
+        demand_score = aliased(ScoreResult, name="latest_demand_score")
+        competition_score = aliased(ScoreResult, name="latest_competition_score")
+        price_stability_score = aliased(ScoreResult, name="latest_price_stability_score")
         overall_score = aliased(ScoreResult, name="latest_overall_score")
         confidence_score = aliased(ScoreResult, name="latest_confidence_score")
         recommendation = aliased(StrategyRecommendation, name="latest_recommendation")
@@ -419,6 +433,9 @@ class PortfolioRepository:
             select(
                 Product,
                 snapshot,
+                demand_score,
+                competition_score,
+                price_stability_score,
                 overall_score,
                 confidence_score,
                 recommendation,
@@ -431,6 +448,20 @@ class PortfolioRepository:
                     snapshot.id == Product.latest_snapshot_id,
                     snapshot.product_id == Product.id,
                 ),
+            )
+            .outerjoin(
+                demand_score,
+                demand_score.id == self._latest_score_id(Product.latest_snapshot_id, "demand"),
+            )
+            .outerjoin(
+                competition_score,
+                competition_score.id
+                == self._latest_score_id(Product.latest_snapshot_id, "competition"),
+            )
+            .outerjoin(
+                price_stability_score,
+                price_stability_score.id
+                == self._latest_score_id(Product.latest_snapshot_id, "price_stability"),
             )
             .outerjoin(
                 overall_score,
@@ -454,6 +485,9 @@ class PortfolioRepository:
         return _ProjectionBundle(
             statement=statement,
             snapshot=snapshot,
+            demand_score=demand_score,
+            competition_score=competition_score,
+            price_stability_score=price_stability_score,
             overall_score=overall_score,
             confidence_score=confidence_score,
             recommendation=recommendation,
@@ -498,6 +532,46 @@ class PortfolioRepository:
     @staticmethod
     def _apply_filters(bundle: _ProjectionBundle, spec: ProductQuerySpec) -> Select[Any]:
         statement = bundle.statement
+        if spec.research_screen is not None:
+            screen = spec.research_screen
+            for expression, minimum, maximum in (
+                (bundle.overall_score.score_value, screen.min_overall, screen.max_overall),
+                (bundle.demand_score.score_value, screen.min_demand, None),
+                (bundle.competition_score.score_value, screen.min_competition, None),
+                (
+                    bundle.price_stability_score.score_value,
+                    screen.min_price_stability,
+                    None,
+                ),
+                (
+                    bundle.confidence_score.score_value,
+                    screen.min_data_confidence,
+                    screen.max_data_confidence,
+                ),
+            ):
+                if minimum is not None:
+                    statement = statement.where(expression >= minimum)
+                if maximum is not None:
+                    statement = statement.where(expression <= maximum)
+            if screen.max_offer_count is not None:
+                statement = statement.where(bundle.offer_count <= screen.max_offer_count)
+            if screen.require_price:
+                statement = statement.where(bundle.snapshot.buy_box_price.is_not(None))
+        if spec.brand_classification is not None:
+            normalized_brand = func.lower(func.trim(Product.brand))
+            markers = tuple(sorted(spec.generic_brand_markers))
+            if spec.brand_classification is BrandClassification.unknown:
+                statement = statement.where(
+                    or_(Product.brand.is_(None), func.trim(Product.brand) == "")
+                )
+            elif spec.brand_classification is BrandClassification.likely_generic:
+                statement = statement.where(normalized_brand.in_(markers))
+            else:
+                statement = statement.where(
+                    Product.brand.is_not(None),
+                    func.trim(Product.brand) != "",
+                    normalized_brand.not_in(markers),
+                )
         if spec.search:
             pattern = f"%{_escape_like(spec.search)}%"
             statement = statement.where(
@@ -540,6 +614,9 @@ class PortfolioRepository:
     ) -> Select[Any]:
         expressions: dict[ProductSortField, ColumnElement[Any]] = {
             ProductSortField.overall_opportunity: bundle.overall_score.score_value,
+            ProductSortField.demand: bundle.demand_score.score_value,
+            ProductSortField.competition: bundle.competition_score.score_value,
+            ProductSortField.price_stability: bundle.price_stability_score.score_value,
             ProductSortField.data_confidence: bundle.confidence_score.score_value,
             ProductSortField.price: bundle.snapshot.buy_box_price,
             ProductSortField.offer_count: bundle.offer_count,
@@ -563,10 +640,13 @@ class PortfolioRepository:
             ProductReadRecord(
                 product=cast(Product, row[0]),
                 snapshot=cast(ProductSnapshot | None, row[1]),
-                overall_score=cast(ScoreResult | None, row[2]),
-                confidence_score=cast(ScoreResult | None, row[3]),
-                recommendation=cast(StrategyRecommendation | None, row[4]),
-                offer_count=cast(int | None, row[5]),
+                demand_score=cast(ScoreResult | None, row[2]),
+                competition_score=cast(ScoreResult | None, row[3]),
+                price_stability_score=cast(ScoreResult | None, row[4]),
+                overall_score=cast(ScoreResult | None, row[5]),
+                confidence_score=cast(ScoreResult | None, row[6]),
+                recommendation=cast(StrategyRecommendation | None, row[7]),
+                offer_count=cast(int | None, row[8]),
             )
             for row in rows
         ]

@@ -40,11 +40,21 @@ from app.modules.portfolio.schemas import (
     ProductSummaryResponse,
     RecommendationEvidenceResponse,
     RecommendationResponse,
+    ResearchAssessmentResponse,
+    ResearchScreenResponse,
     ScopeResponse,
     ScoreResponse,
     SnapshotResponse,
     StrategyDistributionResponse,
     StrategyHistoryResponse,
+)
+from app.modules.research import (
+    ResearchAssessment,
+    ResearchPolicy,
+    ResearchScreenId,
+    ResearchSignals,
+    classify_research_product,
+    load_default_research_policy,
 )
 from app.modules.scoring.config import load_default_scoring_config
 from app.modules.scoring.types import ScoreName
@@ -58,6 +68,7 @@ _SCORE_ORDER = {
     "data_confidence": 3,
     "overall_opportunity": 4,
 }
+_MONTHLY_BOUGHT_SOURCE_HEADER = "Monthly Sales Trends: Bought in past month"
 
 _AMAZON_DOMAINS = {
     "AE": "www.amazon.ae",
@@ -106,6 +117,7 @@ class PortfolioService:
         self._repository = PortfolioRepository(session)
         strategy_policy = load_default_strategy_policy()
         scoring_config = load_default_scoring_config()
+        self._research_policy = load_default_research_policy()
         self._confidence_threshold = strategy_policy.low_confidence_threshold
         self._weak_score_threshold = scoring_config.score_bands.weak_below
 
@@ -115,6 +127,9 @@ class PortfolioService:
         spec = ProductQuerySpec(
             scope=scope,
             search=query.search,
+            research_screen=self._research_policy.screens[query.screen],
+            brand_classification=query.brand_classification,
+            generic_brand_markers=self._research_policy.generic_brand_markers,
             strategy=query.strategy,
             category=query.category,
             min_score=query.min_score,
@@ -129,6 +144,7 @@ class PortfolioService:
             sort_direction=query.sort_direction,
             page=query.page,
             page_size=query.page_size,
+            require_confirmed_observation=query.screen is not ResearchScreenId.all,
         )
         result = self._repository.list_products(spec)
         total_pages = (
@@ -139,7 +155,12 @@ class PortfolioService:
         return ProductListResponse(
             scope=_scope_response(scope),
             items=[
-                _product_summary(record, marketplace.code, self._confidence_threshold)
+                _product_summary(
+                    record,
+                    marketplace.code,
+                    self._confidence_threshold,
+                    self._research_policy,
+                )
                 for record in result.items
             ],
             pagination=PaginationResponse(
@@ -152,6 +173,8 @@ class PortfolioService:
             ),
             query=AppliedProductQueryResponse(
                 search=query.search,
+                screen=query.screen,
+                brand_classification=query.brand_classification,
                 strategy=query.strategy,
                 category=query.category,
                 min_score=query.min_score,
@@ -165,6 +188,16 @@ class PortfolioService:
                 sort_by=query.sort_by,
                 sort_direction=query.sort_direction,
             ),
+            research_policy_version=self._research_policy.policy_version,
+            research_configuration_checksum=self._research_policy.configuration_checksum,
+            screens=[
+                ResearchScreenResponse(
+                    id=screen.id,
+                    label=screen.label,
+                    description=screen.description,
+                )
+                for screen in self._research_policy.screens.values()
+            ],
         )
 
     def get_product(
@@ -215,13 +248,14 @@ class PortfolioService:
         ]
         latest_scores = scores.get(latest_snapshot.id, {}) if latest_snapshot else {}
         raw_recommendation = recommendations.get(latest_snapshot.id) if latest_snapshot else None
+        display_brand = product.brand or (latest_snapshot.brand if latest_snapshot else None)
         return ProductDetailResponse(
             scope=_scope_response(scope),
             product=ProductIdentityResponse(
                 product_id=product.id,
                 asin=product.asin,
                 title=product.title or (latest_snapshot.title if latest_snapshot else None),
-                brand=product.brand or (latest_snapshot.brand if latest_snapshot else None),
+                brand=display_brand,
                 category=product.category
                 or (latest_snapshot.category if latest_snapshot else None),
                 subcategory=product.subcategory
@@ -231,6 +265,20 @@ class PortfolioService:
                 ),
                 amazon_url=_amazon_url(marketplace.code, product.asin),
                 created_at=product.created_at,
+            ),
+            research=(
+                _research_assessment_response(
+                    classify_research_product(
+                        _research_signals_from_scores(
+                            latest_snapshot,
+                            display_brand,
+                            latest_scores,
+                        ),
+                        self._research_policy,
+                    )
+                )
+                if latest_snapshot is not None and latest_snapshot.observed_on is not None
+                else None
             ),
             latest_snapshot=latest_response,
             notices=_data_notices(
@@ -279,12 +327,22 @@ class PortfolioService:
             ],
             data_quality_alerts=_quality_alerts(quality_counts, latest_import),
             top_opportunities=[
-                _product_summary(record, marketplace.code, self._confidence_threshold)
+                _product_summary(
+                    record,
+                    marketplace.code,
+                    self._confidence_threshold,
+                    self._research_policy,
+                )
                 for record in opportunity_page.items
             ],
             top_risks=[
                 DashboardRiskResponse(
-                    product=_product_summary(record, marketplace.code, self._confidence_threshold),
+                    product=_product_summary(
+                        record,
+                        marketplace.code,
+                        self._confidence_threshold,
+                        self._research_policy,
+                    ),
                     reason_codes=_risk_reason_codes(
                         record,
                         confidence_threshold=self._confidence_threshold,
@@ -434,6 +492,31 @@ def _ordered_scores(scores: dict[str, ScoreResult]) -> list[ScoreResponse]:
     ]
 
 
+def _source_value(snapshot: ProductSnapshot, header: str) -> object | None:
+    if not isinstance(snapshot.source_payload, list):
+        return None
+    for item in snapshot.source_payload:
+        if isinstance(item, dict) and item.get("header") == header:
+            return item.get("value")
+    return None
+
+
+def _non_negative_integer(value: object) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        parsed = Decimal(str(value).replace(",", "").strip())
+    except Exception:
+        return None
+    if not parsed.is_finite() or parsed < 0 or parsed != parsed.to_integral_value():
+        return None
+    return int(parsed)
+
+
+def _estimated_monthly_bought(snapshot: ProductSnapshot) -> int | None:
+    return _non_negative_integer(_source_value(snapshot, _MONTHLY_BOUGHT_SOURCE_HEADER))
+
+
 def _market_metrics(snapshot: ProductSnapshot) -> MarketMetricsResponse:
     return MarketMetricsResponse(
         buy_box_price=snapshot.buy_box_price,
@@ -449,6 +532,7 @@ def _market_metrics(snapshot: ProductSnapshot) -> MarketMetricsResponse:
         buy_box_winner_count_90d=snapshot.buy_box_winner_count_90d,
         buy_box_oos_percentage_90d=snapshot.buy_box_oos_percentage_90d,
         monthly_sold=snapshot.monthly_sold,
+        estimated_monthly_bought=_estimated_monthly_bought(snapshot),
         is_fba=snapshot.is_fba,
     )
 
@@ -471,7 +555,10 @@ def _snapshot_response(
 
 
 def _product_summary(
-    record: ProductReadRecord, marketplace_code: str, confidence_threshold: int
+    record: ProductReadRecord,
+    marketplace_code: str,
+    confidence_threshold: int,
+    research_policy: ResearchPolicy,
 ) -> ProductSummaryResponse:
     product = record.product
     snapshot = record.snapshot
@@ -499,6 +586,18 @@ def _product_summary(
             if record.recommendation is not None
             else "recommendation_missing"
         )
+    research = (
+        _research_assessment_response(
+            classify_research_product(
+                _research_signals_from_record(
+                    record, product.brand or (snapshot.brand if snapshot else None)
+                ),
+                research_policy,
+            )
+        )
+        if snapshot is not None and snapshot.observed_on is not None
+        else None
+    )
     return ProductSummaryResponse(
         product_id=product.id,
         asin=product.asin,
@@ -512,8 +611,21 @@ def _product_summary(
         latest_snapshot_at=snapshot.snapshot_at if snapshot else None,
         latest_observed_on=snapshot.observed_on if snapshot else None,
         buy_box_price=snapshot.buy_box_price if snapshot else None,
+        buy_box_price_90d=snapshot.buy_box_price_90d if snapshot else None,
         currency_code=snapshot.currency_code if snapshot else None,
         offer_count=record.offer_count,
+        sales_rank=snapshot.sales_rank if snapshot else None,
+        sales_rank_90d=snapshot.sales_rank_90d if snapshot else None,
+        estimated_monthly_bought=_estimated_monthly_bought(snapshot) if snapshot else None,
+        buy_box_winner_count_90d=snapshot.buy_box_winner_count_90d if snapshot else None,
+        buy_box_oos_percentage_90d=(snapshot.buy_box_oos_percentage_90d if snapshot else None),
+        demand_score=record.demand_score.score_value if record.demand_score else None,
+        competition_score=(
+            record.competition_score.score_value if record.competition_score else None
+        ),
+        price_stability_score=(
+            record.price_stability_score.score_value if record.price_stability_score else None
+        ),
         overall_opportunity_score=(
             record.overall_score.score_value if record.overall_score else None
         ),
@@ -526,7 +638,78 @@ def _product_summary(
             record.overall_score.formula_version if record.overall_score else None
         ),
         strategy_rules_version=recommendation.rules_version if recommendation else None,
+        research=research,
         data_quality_codes=codes,
+    )
+
+
+def _score_value(scores: dict[str, ScoreResult], name: str) -> int | None:
+    score = scores.get(name)
+    return score.score_value if score is not None else None
+
+
+def _research_signals_from_scores(
+    snapshot: ProductSnapshot,
+    brand: str | None,
+    scores: dict[str, ScoreResult],
+) -> ResearchSignals:
+    return ResearchSignals(
+        demand_score=_score_value(scores, "demand"),
+        competition_score=_score_value(scores, "competition"),
+        price_stability_score=_score_value(scores, "price_stability"),
+        data_confidence_score=_score_value(scores, "data_confidence"),
+        overall_opportunity_score=_score_value(scores, "overall_opportunity"),
+        current_offer_count=(
+            snapshot.new_offer_count
+            if snapshot.new_offer_count is not None
+            else snapshot.total_offer_count
+        ),
+        buy_box_price=snapshot.buy_box_price,
+        buy_box_price_90d=snapshot.buy_box_price_90d,
+        estimated_monthly_bought=_estimated_monthly_bought(snapshot),
+        brand=brand,
+    )
+
+
+def _research_signals_from_record(
+    record: ProductReadRecord,
+    brand: str | None,
+) -> ResearchSignals:
+    snapshot = record.snapshot
+    return ResearchSignals(
+        demand_score=record.demand_score.score_value if record.demand_score else None,
+        competition_score=(
+            record.competition_score.score_value if record.competition_score else None
+        ),
+        price_stability_score=(
+            record.price_stability_score.score_value if record.price_stability_score else None
+        ),
+        data_confidence_score=(
+            record.confidence_score.score_value if record.confidence_score else None
+        ),
+        overall_opportunity_score=(
+            record.overall_score.score_value if record.overall_score else None
+        ),
+        current_offer_count=record.offer_count,
+        buy_box_price=snapshot.buy_box_price if snapshot else None,
+        buy_box_price_90d=snapshot.buy_box_price_90d if snapshot else None,
+        estimated_monthly_bought=_estimated_monthly_bought(snapshot) if snapshot else None,
+        brand=brand,
+    )
+
+
+def _research_assessment_response(
+    assessment: ResearchAssessment,
+) -> ResearchAssessmentResponse:
+    return ResearchAssessmentResponse(
+        status=assessment.status,
+        brand_classification=assessment.brand_classification,
+        policy_version=assessment.policy_version,
+        configuration_checksum=assessment.configuration_checksum,
+        reason_codes=list(assessment.reason_codes),
+        positive_signals=list(assessment.positive_signals),
+        risk_signals=list(assessment.risk_signals),
+        missing_evidence=list(assessment.missing_evidence),
     )
 
 

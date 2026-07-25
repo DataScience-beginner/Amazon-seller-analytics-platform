@@ -556,6 +556,7 @@ export type DashboardApiResponse = {
 export type ProductQuery = {
   organisation_id: string;
   marketplace_id: string;
+  import_batch_id?: string;
   search?: string;
   screen?: string;
   brand_classification?: string;

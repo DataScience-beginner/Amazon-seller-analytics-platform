@@ -63,9 +63,11 @@ class PortfolioScopeQuery(BaseModel):
 
 class DatasetOverviewQuery(PortfolioScopeQuery):
     category: CategoryText | None = None
+    import_batch_id: ScopeId | None = None
 
 
 class ProductListQuery(PortfolioScopeQuery):
+    import_batch_id: ScopeId | None = None
     search: SearchText | None = None
     screen: ResearchScreenId = ResearchScreenId.all
     brand_classification: BrandClassification | None = None
@@ -231,6 +233,7 @@ class PaginationResponse(BaseModel):
 
 
 class AppliedProductQueryResponse(BaseModel):
+    import_batch_id: str | None
     search: str | None
     screen: ResearchScreenId
     brand_classification: BrandClassification | None
@@ -407,6 +410,7 @@ class TargetCostAssumptionsRequest(BaseModel):
 
 class CategoryCostEstimateQuery(PortfolioScopeQuery):
     subcategory: CategoryText
+    import_batch_id: ScopeId | None = None
     page: Annotated[int, Field(ge=1)] = 1
     page_size: Annotated[int, Field(ge=1, le=100)] = 25
 

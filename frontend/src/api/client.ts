@@ -258,7 +258,8 @@ export async function fetchDashboard(
 export function fetchDatasetOverview(
   organisationId: string,
   marketplaceId: string,
-  category: string,
+  category: string | undefined,
+  importBatchId?: string,
   signal?: AbortSignal,
 ) {
   return request<NonNullable<DashboardApiResponse['dataset_overview']>>(
@@ -266,6 +267,7 @@ export function fetchDatasetOverview(
       organisation_id: organisationId,
       marketplace_id: marketplaceId,
       category,
+      import_batch_id: importBatchId,
     })}`,
     { signal },
   );
@@ -276,6 +278,7 @@ export function fetchCategoryCostEstimate(
   marketplaceId: string,
   subcategory: string,
   assumptions: TargetCostAssumptions,
+  importBatchId?: string,
   signal?: AbortSignal,
 ) {
   return request<CategoryCostEstimateResponse>(
@@ -283,6 +286,7 @@ export function fetchCategoryCostEstimate(
       organisation_id: organisationId,
       marketplace_id: marketplaceId,
       subcategory,
+      import_batch_id: importBatchId,
       page: '1',
       page_size: '25',
     })}`,

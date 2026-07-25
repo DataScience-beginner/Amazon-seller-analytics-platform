@@ -122,6 +122,13 @@ Box price where available, otherwise the current Buy Box with an explicit source
 maximum wholesale cost excluding GST, GST-inclusive cash outlay and the individual Estimated
 allowances. This ephemeral research calculation does not persist or replace audited cost profiles.
 
+The dataset-overview, product-list and category-cost query contracts accept optional
+`import_batch_id`. When present, only immutable snapshots belonging to that tenant-scoped batch are
+eligible; products absent from the batch are excluded. When absent, the explicitly labelled
+combined view continues to use each product's latest confirmed observation. The UI obtains selector
+options only from completed import records and never treats an uploaded-but-unconfirmed or rejected
+file as a dataset.
+
 ## Score semantics
 
 All scores are integer 0–100, where higher is favourable:

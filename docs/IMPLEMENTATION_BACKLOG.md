@@ -262,6 +262,20 @@ decide the maximum wholesale price worth investigating.
 - The versioned calculation runs in a pure backend kernel and never creates a seller cost profile,
   supplier quotation or purchasing instruction.
 
+#### SOS-307 — Select an imported dataset explicitly
+
+**As a seller,** I want to switch between completed imports so separate research datasets are not
+silently blended.
+
+**Acceptance criteria**
+
+- The dashboard lists completed imports with filename, observation date and row count.
+- The combined latest-evidence view is explicitly labelled and remains available.
+- Selecting an import batch scopes dataset overview, category drill-down, subcategory product table
+  and target-sourcing-cost estimates to snapshots from that batch.
+- Import selection never deletes, overwrites or re-dates historical evidence.
+- A CSV that was not successfully imported cannot appear as an available dataset.
+
 ## Phase 2 — Unit economics and sourcing
 
 ### Epic E4: Profitability engine

@@ -1,6 +1,7 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
-import { fetchDashboard } from '../api/client';
+import { fetchDashboard, fetchDatasetOverview, fetchImports } from '../api/client';
+import type { DatasetOverview as DatasetOverviewData } from '../api/contracts';
 import { Link } from '../app/router';
 import { useWorkspace } from '../app/workspace';
 import { EmptyState, ErrorState, LoadingState } from '../components/Feedback';
@@ -10,6 +11,74 @@ import { StatusBadge } from '../components/StatusBadge';
 import { DatasetOverview } from '../features/dashboard/DatasetOverview';
 import { useAsync } from '../hooks/useAsync';
 import { formatDate, formatMonth, formatNumber, humanize } from '../utils/format';
+
+function DashboardDatasetSection({
+  initialOverview,
+  organisationId,
+  marketplaceId,
+}: {
+  initialOverview: DatasetOverviewData;
+  organisationId: string;
+  marketplaceId: string;
+}) {
+  const [importBatchId, setImportBatchId] = useState('');
+  const loadImports = useCallback(
+    (signal: AbortSignal) => fetchImports(organisationId, marketplaceId, signal),
+    [marketplaceId, organisationId],
+  );
+  const imports = useAsync(loadImports);
+  const loadOverview = useCallback(
+    (signal: AbortSignal) =>
+      importBatchId
+        ? fetchDatasetOverview(organisationId, marketplaceId, undefined, importBatchId, signal)
+        : Promise.resolve(initialOverview),
+    [importBatchId, initialOverview, marketplaceId, organisationId],
+  );
+  const overview = useAsync(loadOverview);
+  const completedImports =
+    imports.status === 'success'
+      ? imports.data.items.filter((item) => item.status === 'completed')
+      : [];
+
+  return (
+    <>
+      <section className="dataset-selector" aria-labelledby="dataset-selector-heading">
+        <div>
+          <p className="data-label">Active product dataset</p>
+          <h2 id="dataset-selector-heading">Choose which import to analyse</h2>
+          <p>
+            Imports remain separate evidence sets. Changing this selection does not delete data.
+          </p>
+        </div>
+        <label>
+          <span>Dataset</span>
+          <select value={importBatchId} onChange={(event) => setImportBatchId(event.target.value)}>
+            <option value="">Combined latest product evidence</option>
+            {completedImports.map((item) => (
+              <option value={item.id} key={item.id}>
+                {item.original_filename ?? item.filename ?? 'Keepa import'} ·{' '}
+                {item.observed_on ?? 'date unavailable'} · {formatNumber(item.row_count ?? 0, 0)}{' '}
+                rows
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+      {overview.status === 'loading' && <LoadingState label="Switching product dataset…" />}
+      {overview.status === 'error' && (
+        <ErrorState error={overview.error} onRetry={overview.retry} />
+      )}
+      {overview.status === 'success' && (
+        <DatasetOverview
+          overview={overview.data}
+          organisationId={organisationId}
+          marketplaceId={marketplaceId}
+          importBatchId={importBatchId || undefined}
+        />
+      )}
+    </>
+  );
+}
 
 export function DashboardPage() {
   const { selection } = useWorkspace();
@@ -52,8 +121,8 @@ export function DashboardPage() {
       {state.status === 'success' && state.data.kpis.tracked_products > 0 && (
         <div className="dashboard-stack">
           {state.data.dataset_overview && (
-            <DatasetOverview
-              overview={state.data.dataset_overview}
+            <DashboardDatasetSection
+              initialOverview={state.data.dataset_overview}
               organisationId={organisationId}
               marketplaceId={marketplaceId}
             />

@@ -144,6 +144,7 @@ class PortfolioService:
         marketplace = self._repository.ensure_scope(scope)
         spec = ProductQuerySpec(
             scope=scope,
+            import_batch_id=query.import_batch_id,
             search=query.search,
             research_screen=self._research_policy.screens[query.screen],
             brand_classification=query.brand_classification,
@@ -191,6 +192,7 @@ class PortfolioService:
                 has_next=query.page < total_pages,
             ),
             query=AppliedProductQueryResponse(
+                import_batch_id=query.import_batch_id,
                 search=query.search,
                 screen=query.screen,
                 brand_classification=query.brand_classification,
@@ -391,7 +393,11 @@ class PortfolioService:
         scope = _scope(query)
         self._repository.ensure_scope(scope)
         return _dataset_overview(
-            self._repository.dataset_evidence_rows(scope, category=query.category)
+            self._repository.dataset_evidence_rows(
+                scope,
+                category=query.category,
+                import_batch_id=query.import_batch_id,
+            )
         )
 
     def category_cost_estimate(
@@ -412,6 +418,7 @@ class PortfolioService:
         page = self._repository.list_products(
             ProductQuerySpec(
                 scope=scope,
+                import_batch_id=query.import_batch_id,
                 subcategory=query.subcategory,
                 sort_by=ProductSortField.overall_opportunity,
                 page=query.page,

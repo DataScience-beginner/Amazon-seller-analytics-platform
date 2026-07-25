@@ -33,6 +33,7 @@ class PortfolioScope:
 @dataclass(frozen=True, slots=True)
 class ProductQuerySpec:
     scope: PortfolioScope
+    import_batch_id: str | None = None
     search: str | None = None
     research_screen: ResearchScreen | None = None
     brand_classification: BrandClassification | None = None
@@ -135,7 +136,7 @@ class PortfolioRepository:
         return marketplace
 
     def list_products(self, spec: ProductQuerySpec) -> ProductPage:
-        bundle = self._build_product_projection(spec.scope)
+        bundle = self._build_product_projection(spec.scope, import_batch_id=spec.import_batch_id)
         statement = self._apply_filters(bundle, spec)
         total_items = int(
             self._session.scalar(
@@ -432,6 +433,7 @@ class PortfolioRepository:
         scope: PortfolioScope,
         *,
         category: str | None = None,
+        import_batch_id: str | None = None,
         limit: int = 10_001,
     ) -> list[DatasetEvidenceRow]:
         """Return a bounded evidence projection for in-process aggregate calculations."""
@@ -459,6 +461,8 @@ class PortfolioRepository:
         )
         if category is not None:
             statement = statement.where(func.lower(Product.category) == category.casefold())
+        if import_batch_id is not None:
+            statement = statement.where(ProductSnapshot.import_batch_id == import_batch_id)
         rows = self._session.execute(statement).all()
         return [
             DatasetEvidenceRow(
@@ -470,7 +474,9 @@ class PortfolioRepository:
             for row in rows
         ]
 
-    def _build_product_projection(self, scope: PortfolioScope) -> _ProjectionBundle:
+    def _build_product_projection(
+        self, scope: PortfolioScope, *, import_batch_id: str | None = None
+    ) -> _ProjectionBundle:
         snapshot = aliased(ProductSnapshot, name="latest_snapshot")
         demand_score = aliased(ScoreResult, name="latest_demand_score")
         competition_score = aliased(ScoreResult, name="latest_competition_score")
@@ -480,6 +486,17 @@ class PortfolioRepository:
         recommendation = aliased(StrategyRecommendation, name="latest_recommendation")
         offer_count = func.coalesce(snapshot.new_offer_count, snapshot.total_offer_count).label(
             "offer_count"
+        )
+        snapshot_join = (
+            and_(
+                snapshot.product_id == Product.id,
+                snapshot.import_batch_id == import_batch_id,
+            )
+            if import_batch_id is not None
+            else and_(
+                snapshot.id == Product.latest_snapshot_id,
+                snapshot.product_id == Product.id,
+            )
         )
         statement = (
             select(
@@ -496,38 +513,31 @@ class PortfolioRepository:
             .select_from(Product)
             .outerjoin(
                 snapshot,
-                and_(
-                    snapshot.id == Product.latest_snapshot_id,
-                    snapshot.product_id == Product.id,
-                ),
+                snapshot_join,
             )
             .outerjoin(
                 demand_score,
-                demand_score.id == self._latest_score_id(Product.latest_snapshot_id, "demand"),
+                demand_score.id == self._latest_score_id(snapshot.id, "demand"),
             )
             .outerjoin(
                 competition_score,
-                competition_score.id
-                == self._latest_score_id(Product.latest_snapshot_id, "competition"),
+                competition_score.id == self._latest_score_id(snapshot.id, "competition"),
             )
             .outerjoin(
                 price_stability_score,
-                price_stability_score.id
-                == self._latest_score_id(Product.latest_snapshot_id, "price_stability"),
+                price_stability_score.id == self._latest_score_id(snapshot.id, "price_stability"),
             )
             .outerjoin(
                 overall_score,
-                overall_score.id
-                == self._latest_score_id(Product.latest_snapshot_id, "overall_opportunity"),
+                overall_score.id == self._latest_score_id(snapshot.id, "overall_opportunity"),
             )
             .outerjoin(
                 confidence_score,
-                confidence_score.id
-                == self._latest_score_id(Product.latest_snapshot_id, "data_confidence"),
+                confidence_score.id == self._latest_score_id(snapshot.id, "data_confidence"),
             )
             .outerjoin(
                 recommendation,
-                recommendation.id == self._latest_recommendation_id(Product.latest_snapshot_id),
+                recommendation.id == self._latest_recommendation_id(snapshot.id),
             )
             .where(
                 Product.organisation_id == scope.organisation_id,
@@ -560,7 +570,7 @@ class PortfolioRepository:
                 ScoreResult.id.desc(),
             )
             .limit(1)
-            .correlate(Product)
+            .correlate_except(ScoreResult)
             .scalar_subquery()
         )
 
@@ -577,13 +587,15 @@ class PortfolioRepository:
                 StrategyRecommendation.id.desc(),
             )
             .limit(1)
-            .correlate(Product)
+            .correlate_except(StrategyRecommendation)
             .scalar_subquery()
         )
 
     @staticmethod
     def _apply_filters(bundle: _ProjectionBundle, spec: ProductQuerySpec) -> Select[Any]:
         statement = bundle.statement
+        if spec.import_batch_id is not None:
+            statement = statement.where(bundle.snapshot.id.is_not(None))
         if spec.research_screen is not None:
             screen = spec.research_screen
             for expression, minimum, maximum in (

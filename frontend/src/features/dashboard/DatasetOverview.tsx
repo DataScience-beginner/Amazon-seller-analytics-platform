@@ -70,10 +70,12 @@ function SubcategoryTables({
   organisationId,
   marketplaceId,
   subcategory,
+  importBatchId,
 }: {
   organisationId: string;
   marketplaceId: string;
   subcategory: string;
+  importBatchId?: string;
 }) {
   const [view, setView] = useState<'keepa' | 'cost'>('keepa');
   const [draft, setDraft] = useState(defaultAssumptions);
@@ -85,6 +87,7 @@ function SubcategoryTables({
           {
             organisation_id: organisationId,
             marketplace_id: marketplaceId,
+            import_batch_id: importBatchId,
             subcategory,
             screen: 'all',
             sort_by: 'overall_opportunity',
@@ -94,9 +97,16 @@ function SubcategoryTables({
           },
           signal,
         ),
-        fetchCategoryCostEstimate(organisationId, marketplaceId, subcategory, assumptions, signal),
+        fetchCategoryCostEstimate(
+          organisationId,
+          marketplaceId,
+          subcategory,
+          assumptions,
+          importBatchId,
+          signal,
+        ),
       ]),
-    [assumptions, marketplaceId, organisationId, subcategory],
+    [assumptions, importBatchId, marketplaceId, organisationId, subcategory],
   );
   const state = useAsync(load);
 
@@ -264,15 +274,18 @@ function CategoryDeepDive({
   organisationId,
   marketplaceId,
   category,
+  importBatchId,
 }: {
   organisationId: string;
   marketplaceId: string;
   category: string;
+  importBatchId?: string;
 }) {
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const load = useCallback(
-    (signal: AbortSignal) => fetchDatasetOverview(organisationId, marketplaceId, category, signal),
-    [category, marketplaceId, organisationId],
+    (signal: AbortSignal) =>
+      fetchDatasetOverview(organisationId, marketplaceId, category, importBatchId, signal),
+    [category, importBatchId, marketplaceId, organisationId],
   );
   const state = useAsync(load);
 
@@ -335,6 +348,7 @@ function CategoryDeepDive({
           organisationId={organisationId}
           marketplaceId={marketplaceId}
           subcategory={activeSubcategory}
+          importBatchId={importBatchId}
         />
       )}
     </section>
@@ -345,10 +359,12 @@ export function DatasetOverview({
   overview,
   organisationId,
   marketplaceId,
+  importBatchId,
 }: {
   overview: DatasetOverviewData;
   organisationId: string;
   marketplaceId: string;
+  importBatchId?: string;
 }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const revenueReady = overview.readiness === 'revenue_ready';
@@ -453,6 +469,7 @@ export function DatasetOverview({
           organisationId={organisationId}
           marketplaceId={marketplaceId}
           category={selectedCategory}
+          importBatchId={importBatchId}
         />
       )}
     </section>

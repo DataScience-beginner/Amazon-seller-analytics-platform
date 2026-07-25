@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import ApplicationError
 from app.db.session import get_db
 from app.models.domain import (
+    ImportBatch,
     Marketplace,
     Organisation,
     Product,
@@ -129,6 +130,7 @@ def _add_product(
     price_stability_score: int = 85,
     monthly_bought: int | None = None,
     observed_on: date | None = date(2026, 1, 1),
+    import_batch: ImportBatch | None = None,
 ) -> Product:
     product = Product(
         id=product_id,
@@ -147,6 +149,7 @@ def _add_product(
         snapshot_at=datetime(2026, 1, 1, tzinfo=UTC),
         observed_on=observed_on,
         observed_on_source="user_confirmed" if observed_on is not None else None,
+        import_batch=import_batch,
         buy_box_price=Decimal(price),
         buy_box_price_90d=Decimal(price),
         currency_code="INR",
@@ -284,6 +287,21 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
         marketplace_id="marketplace-overview",
         code="IN",
     )
+    first_batch = ImportBatch(
+        id="overview-batch-1",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        original_filename="first.xlsx",
+        checksum="overview-checksum-1",
+    )
+    second_batch = ImportBatch(
+        id="overview-batch-2",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        original_filename="second.xlsx",
+        checksum="overview-checksum-2",
+    )
+    db_session.add_all([first_batch, second_batch])
     first = _add_product(
         db_session,
         product_id="overview-1",
@@ -299,6 +317,7 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
         confidence=90,
         strategy="test_buy",
         monthly_bought=100,
+        import_batch=first_batch,
     )
     second = _add_product(
         db_session,
@@ -315,6 +334,7 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
         confidence=90,
         strategy="test_buy",
         monthly_bought=None,
+        import_batch=second_batch,
     )
     first.subcategory = "Cars & Race Cars"
     second.subcategory = "Dolls"
@@ -352,6 +372,22 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
                 "target_profit_percent": "15",
             },
         )
+        selected_batch = client.get(
+            "/api/v1/dashboard/dataset-overview",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+                "import_batch_id": first_batch.id,
+            },
+        )
+        selected_products = client.get(
+            "/api/v1/products",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+                "import_batch_id": first_batch.id,
+            },
+        )
 
     assert response.status_code == 200
     overview = response.json()["dataset_overview"]
@@ -376,6 +412,9 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
     assert estimate["items"][0]["asin"] == "B000OVER01"
     assert estimate["items"][0]["selling_price_source"] == "buy_box_90d_average"
     assert estimate["items"][0]["maximum_wholesale_cost_ex_gst"] == "205.17"
+    assert selected_batch.json()["product_count"] == 1
+    assert selected_products.json()["pagination"]["total_items"] == 1
+    assert selected_products.json()["items"][0]["asin"] == "B000OVER01"
 
 
 def test_legacy_undated_evidence_is_browsable_but_excluded_from_current_decisions(

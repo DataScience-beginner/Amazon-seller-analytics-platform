@@ -2074,6 +2074,35 @@ tbody tr:hover {
   gap: 14px;
 }
 
+.dataset-selector {
+  align-items: end;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1fr minmax(20rem, 0.8fr);
+  padding: 18px;
+}
+
+.dataset-selector h2,
+.dataset-selector p {
+  margin: 3px 0 0;
+}
+
+.dataset-selector label {
+  display: grid;
+  font-size: 0.8rem;
+  font-weight: 750;
+  gap: 6px;
+}
+
+.dataset-selector select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
 .dataset-readiness {
   align-items: center;
   background: var(--surface);
@@ -2337,6 +2366,10 @@ tbody tr:hover {
 }
 
 @media (max-width: 680px) {
+  .dataset-selector {
+    grid-template-columns: 1fr;
+  }
+
   .dataset-readiness {
     align-items: flex-start;
     flex-direction: column;

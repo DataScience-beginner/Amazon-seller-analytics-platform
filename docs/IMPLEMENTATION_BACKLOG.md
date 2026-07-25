@@ -279,6 +279,24 @@ silently blended.
 - Import selection never deletes, overwrites or re-dates historical evidence.
 - A CSV that was not successfully imported cannot appear as an available dataset.
 
+#### SOS-308 — Rank category research candidates transparently
+
+**As a first-time buyer,** I want an explainable research ranking so I can investigate products in
+the right order without mistaking imported market evidence for a purchase approval.
+
+**Acceptance criteria**
+
+- A versioned configuration weights demand 30%, price stability 20%, competition quality 15%, data
+  confidence 15%, sales-rank trend 10% and Buy Box availability 10%.
+- Every component score, weight, reason code, formula version and configuration checksum is returned.
+- Missing evidence scores zero rather than being optimistically reweighted.
+- Zero- and single-offer listings are capped and flagged rather than treated as automatically safe.
+- Ranking is calculated across the complete bounded selected subcategory before pagination.
+- The category table can sort server-side by ranking or an individual decision metric.
+- Keepa multi-image cells yield one safe thumbnail without changing preserved source evidence.
+- Amazon links are generated from the scoped marketplace and ASIN, never a default marketplace.
+- The result is labelled research priority, not a buying instruction.
+
 ## Phase 2 — Unit economics and sourcing
 
 ### Epic E4: Profitability engine

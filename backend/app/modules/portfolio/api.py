@@ -14,6 +14,8 @@ from app.modules.portfolio.schemas import (
     ProductDetailResponse,
     ProductListQuery,
     ProductListResponse,
+    ResearchRankingQuery,
+    ResearchRankingResponse,
     TargetCostAssumptionsRequest,
 )
 from app.modules.portfolio.service import PortfolioService
@@ -56,6 +58,18 @@ def estimate_category_costs(
     session: Annotated[Session, Depends(get_db)],
 ) -> CategoryCostEstimateResponse:
     return PortfolioService(session).category_cost_estimate(query, request)
+
+
+@router.get(
+    "/dashboard/research-ranking",
+    response_model=ResearchRankingResponse,
+    summary="Rank a bounded subcategory with the transparent research-priority formula",
+)
+def get_research_ranking(
+    query: Annotated[ResearchRankingQuery, Query()],
+    session: Annotated[Session, Depends(get_db)],
+) -> ResearchRankingResponse:
+    return PortfolioService(session).research_ranking(query)
 
 
 @router.get(

@@ -130,22 +130,106 @@ describe('DatasetOverview', () => {
             },
           });
         }
-        if (url.includes('/products?')) {
+        if (url.includes('/dashboard/research-ranking')) {
           return Response.json({
-            scope: { organisation_id: 'org-1', marketplace_id: 'market-1' },
-            items: [],
+            subcategory: 'Cars & Race Cars',
+            sort_by: 'research_priority',
+            sort_direction: 'desc',
+            formula_version: 'selleros.research-priority.v1',
+            configuration_checksum: 'ranking-checksum',
+            weights: {
+              demand: 30,
+              price_stability: 20,
+              competition_quality: 15,
+              data_confidence: 15,
+              sales_rank_trend: 10,
+              buy_box_availability: 10,
+            },
+            items: [
+              {
+                product: {
+                  product_id: 'product-1',
+                  asin: 'B000RANK01',
+                  title: 'Ranked toy',
+                  brand: 'Synthetic',
+                  category: 'Toys & Games',
+                  subcategory: 'Cars & Race Cars',
+                  image_url: 'https://m.media-amazon.com/toy.jpg',
+                  amazon_url: 'https://www.amazon.in/dp/B000RANK01',
+                  latest_snapshot_id: 'snapshot-1',
+                  latest_snapshot_at: '2026-05-26T00:00:00Z',
+                  latest_observed_on: '2026-05-26',
+                  buy_box_price: '999.00',
+                  buy_box_price_90d: '950.00',
+                  currency_code: 'INR',
+                  offer_count: 3,
+                  sales_rank: 1000,
+                  sales_rank_90d: 1200,
+                  estimated_monthly_bought: 200,
+                  buy_box_winner_count_90d: 2,
+                  buy_box_oos_percentage_90d: '5',
+                  demand_score: 90,
+                  competition_score: 85,
+                  price_stability_score: 88,
+                  overall_opportunity_score: 84,
+                  data_confidence_score: 90,
+                  strategy: 'test_buy',
+                  recommendation_confidence: 90,
+                  score_formula_version: 'selleros.market-opportunity.v1',
+                  strategy_rules_version: 'strategy-v1',
+                  research: null,
+                  data_quality_codes: [],
+                },
+                ranking: {
+                  rank: 1,
+                  score: 88,
+                  formula_version: 'selleros.research-priority.v1',
+                  configuration_checksum: 'ranking-checksum',
+                  warning_codes: [],
+                  components: [
+                    { id: 'demand', label: 'Demand', weight: 30, score: 90 },
+                    {
+                      id: 'price_stability',
+                      label: 'Price stability',
+                      weight: 20,
+                      score: 88,
+                    },
+                    {
+                      id: 'competition_quality',
+                      label: 'Competition quality',
+                      weight: 15,
+                      score: 85,
+                    },
+                    {
+                      id: 'data_confidence',
+                      label: 'Data confidence',
+                      weight: 15,
+                      score: 90,
+                    },
+                    {
+                      id: 'sales_rank_trend',
+                      label: 'Sales-rank trend',
+                      weight: 10,
+                      score: 83,
+                    },
+                    {
+                      id: 'buy_box_availability',
+                      label: 'Buy Box availability',
+                      weight: 10,
+                      score: 95,
+                    },
+                  ],
+                },
+              },
+            ],
             pagination: {
               page: 1,
-              page_size: 10,
-              total_items: 0,
-              total_pages: 0,
+              page_size: 100,
+              total_items: 1,
+              total_pages: 1,
               has_previous: false,
               has_next: false,
             },
-            query: {},
-            research_policy_version: 'product-research-v1.0.0',
-            research_configuration_checksum: 'checksum',
-            screens: [],
           });
         }
         throw new Error(`Unexpected request: ${url}`);
@@ -176,7 +260,15 @@ describe('DatasetOverview', () => {
     expect(screen.getByLabelText('Toys & Games subcategories')).toHaveTextContent(
       'Cars & Race Cars',
     );
-    expect(await screen.findByLabelText('Cars & Race Cars Keepa products')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Cars & Race Cars ranked products')).toBeInTheDocument();
+    expect(screen.getByText('88/100')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View on Amazon.in' })).toHaveAttribute(
+      'href',
+      'https://www.amazon.in/dp/B000RANK01',
+    );
+    expect(screen.getByRole('combobox', { name: 'Sort products by' })).toHaveValue(
+      'research_priority',
+    );
     expect(screen.getByRole('link', { name: 'Open full category research' })).toHaveAttribute(
       'href',
       expect.stringContaining('category=Toys%20%26%20Games'),

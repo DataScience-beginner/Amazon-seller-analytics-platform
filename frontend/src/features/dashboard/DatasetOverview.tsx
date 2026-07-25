@@ -1,9 +1,14 @@
 import { useCallback, useState, type FormEvent } from 'react';
 
-import { fetchCategoryCostEstimate, fetchDatasetOverview, fetchProducts } from '../../api/client';
+import {
+  fetchCategoryCostEstimate,
+  fetchDatasetOverview,
+  fetchResearchRanking,
+} from '../../api/client';
 import type {
   DatasetDistribution,
   DatasetOverview as DatasetOverviewData,
+  ResearchRankingSort,
   TargetCostAssumptions,
 } from '../../api/contracts';
 import { Link } from '../../app/router';
@@ -80,21 +85,18 @@ function SubcategoryTables({
   const [view, setView] = useState<'keepa' | 'cost'>('keepa');
   const [draft, setDraft] = useState(defaultAssumptions);
   const [assumptions, setAssumptions] = useState(defaultAssumptions);
+  const [sortBy, setSortBy] = useState<ResearchRankingSort>('research_priority');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const load = useCallback(
     (signal: AbortSignal) =>
       Promise.all([
-        fetchProducts(
-          {
-            organisation_id: organisationId,
-            marketplace_id: marketplaceId,
-            import_batch_id: importBatchId,
-            subcategory,
-            screen: 'all',
-            sort_by: 'overall_opportunity',
-            sort_direction: 'desc',
-            page: '1',
-            page_size: '25',
-          },
+        fetchResearchRanking(
+          organisationId,
+          marketplaceId,
+          subcategory,
+          sortBy,
+          sortDirection,
+          importBatchId,
           signal,
         ),
         fetchCategoryCostEstimate(
@@ -106,7 +108,7 @@ function SubcategoryTables({
           signal,
         ),
       ]),
-    [assumptions, importBatchId, marketplaceId, organisationId, subcategory],
+    [assumptions, importBatchId, marketplaceId, organisationId, sortBy, sortDirection, subcategory],
   );
   const state = useAsync(load);
 
@@ -179,39 +181,132 @@ function SubcategoryTables({
       {state.status === 'loading' && <LoadingState label={`Loading ${subcategory} products…`} />}
       {state.status === 'error' && <ErrorState error={state.error} onRetry={state.retry} />}
       {state.status === 'success' && view === 'keepa' && (
-        <div className="table-scroll" tabIndex={0} aria-label={`${subcategory} Keepa products`}>
-          <table className="product-table category-product-table">
-            <thead>
-              <tr>
-                <th scope="col">Product</th>
-                <th scope="col">Brand</th>
-                <th scope="col">Buy Box</th>
-                <th scope="col">90-day price</th>
-                <th scope="col">Seller offers</th>
-                <th scope="col">Demand</th>
-                <th scope="col">Competition</th>
-                <th scope="col">Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.data[0].items.map((product) => (
-                <tr key={product.id}>
-                  <td>
-                    <Link to={`/products/${encodeURIComponent(product.id)}`}>{product.title}</Link>
-                    <small className="cell-note">{product.asin}</small>
-                  </td>
-                  <td>{product.brand || 'Unknown'}</td>
-                  <td>{formatMoney(product.buy_box_price)}</td>
-                  <td>{formatMoney(product.buy_box_price_90d)}</td>
-                  <td>{formatNumber(product.offer_count, 0)}</td>
-                  <td>{formatNumber(product.demand_score, 0)}</td>
-                  <td>{formatNumber(product.competition_score, 0)}</td>
-                  <td>{formatNumber(product.confidence_score, 0)}</td>
-                </tr>
+        <>
+          <div className="ranking-controls">
+            <label>
+              Sort products by
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as ResearchRankingSort)}
+              >
+                <option value="research_priority">Research priority</option>
+                <option value="demand">Demand</option>
+                <option value="price_stability">Price stability</option>
+                <option value="competition_quality">Competition quality</option>
+                <option value="data_confidence">Data confidence</option>
+                <option value="sales_rank_trend">Sales-rank trend</option>
+                <option value="buy_box_availability">Buy Box availability</option>
+                <option value="monthly_demand">Estimated monthly demand</option>
+                <option value="price">Buy Box price</option>
+                <option value="offer_count">Seller offers</option>
+                <option value="title">Product title</option>
+              </select>
+            </label>
+            <label>
+              Direction
+              <select
+                value={sortDirection}
+                onChange={(event) => setSortDirection(event.target.value as 'asc' | 'desc')}
+              >
+                <option value="desc">Highest first</option>
+                <option value="asc">Lowest first</option>
+              </select>
+            </label>
+          </div>
+          <details className="ranking-method">
+            <summary>How the transparent research ranking works</summary>
+            <p>
+              Formula {state.data[0].formula_version}. Missing evidence scores zero and is never
+              replaced optimistically. Rank remains the product’s position under Research Priority,
+              even when this table is sorted by another column.
+            </p>
+            <ul>
+              {Object.entries(state.data[0].weights).map(([name, weight]) => (
+                <li key={name}>
+                  {name.replaceAll('_', ' ')}: <strong>{weight}%</strong>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+            <small>Configuration: {state.data[0].configuration_checksum.slice(0, 12)}…</small>
+          </details>
+          <div className="table-scroll" tabIndex={0} aria-label={`${subcategory} ranked products`}>
+            <table className="product-table category-product-table ranking-table">
+              <thead>
+                <tr>
+                  <th scope="col">Rank</th>
+                  <th scope="col">Product</th>
+                  <th scope="col">Priority score</th>
+                  <th scope="col">Demand</th>
+                  <th scope="col">Stability</th>
+                  <th scope="col">Competition</th>
+                  <th scope="col">Confidence</th>
+                  <th scope="col">Rank trend</th>
+                  <th scope="col">Buy Box availability</th>
+                  <th scope="col">Seller offers</th>
+                  <th scope="col">Buy Box</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.data[0].items.map(({ product, ranking }) => {
+                  const component = (id: string) =>
+                    ranking.components.find((item) => item.id === id)?.score;
+                  return (
+                    <tr key={product.id}>
+                      <td>
+                        <strong>#{ranking.rank}</strong>
+                      </td>
+                      <td>
+                        <div className="product-identity">
+                          {product.image_url ? (
+                            <img src={product.image_url} alt="" loading="lazy" />
+                          ) : (
+                            <span className="product-image-placeholder" aria-hidden="true">
+                              No image
+                            </span>
+                          )}
+                          <div>
+                            <Link to={`/products/${encodeURIComponent(product.id)}`}>
+                              {product.title}
+                            </Link>
+                            <small className="cell-note">
+                              {product.asin}
+                              {product.amazon_url && (
+                                <>
+                                  {' · '}
+                                  <a href={product.amazon_url} target="_blank" rel="noreferrer">
+                                    View on Amazon.in
+                                  </a>
+                                </>
+                              )}
+                            </small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{ranking.score}/100</strong>
+                        {ranking.warning_codes.includes('single_seller_control_risk') && (
+                          <small className="cell-note">Single-seller control risk</small>
+                        )}
+                      </td>
+                      <td>{formatNumber(component('demand'), 0)}</td>
+                      <td>{formatNumber(component('price_stability'), 0)}</td>
+                      <td>{formatNumber(component('competition_quality'), 0)}</td>
+                      <td>{formatNumber(component('data_confidence'), 0)}</td>
+                      <td>{formatNumber(component('sales_rank_trend'), 0)}</td>
+                      <td>{formatNumber(component('buy_box_availability'), 0)}</td>
+                      <td>{formatNumber(product.offer_count, 0)}</td>
+                      <td>{formatMoney(product.buy_box_price)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <small>
+            Showing {state.data[0].items.length} of {state.data[0].pagination.total_items} products.
+            This is a research rank, not a purchase approval.
+          </small>
+        </>
       )}
       {state.status === 'success' && view === 'cost' && (
         <>
@@ -239,10 +334,27 @@ function SubcategoryTables({
                   return (
                     <tr key={product.product_id}>
                       <td>
-                        <Link to={`/products/${encodeURIComponent(product.product_id)}`}>
-                          {product.title}
-                        </Link>
-                        <small className="cell-note">{product.asin}</small>
+                        <div className="product-identity">
+                          {product.image_url && (
+                            <img src={product.image_url} alt="" loading="lazy" />
+                          )}
+                          <div>
+                            <Link to={`/products/${encodeURIComponent(product.product_id)}`}>
+                              {product.title}
+                            </Link>
+                            <small className="cell-note">
+                              {product.asin}
+                              {product.amazon_url && (
+                                <>
+                                  {' · '}
+                                  <a href={product.amazon_url} target="_blank" rel="noreferrer">
+                                    View on Amazon.in
+                                  </a>
+                                </>
+                              )}
+                            </small>
+                          </div>
+                        </div>
                       </td>
                       <td>
                         {money(product.selling_price)}

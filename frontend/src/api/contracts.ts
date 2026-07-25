@@ -336,6 +336,62 @@ export type ProductListApiResponse = {
   screens: ResearchScreen[];
 };
 
+export type ResearchRankingSort =
+  | 'research_priority'
+  | 'demand'
+  | 'price_stability'
+  | 'competition_quality'
+  | 'data_confidence'
+  | 'sales_rank_trend'
+  | 'buy_box_availability'
+  | 'price'
+  | 'offer_count'
+  | 'monthly_demand'
+  | 'title';
+
+export type ResearchRankingComponent = {
+  id: string;
+  label: string;
+  weight: number;
+  score: number;
+  reason_code: string;
+};
+
+export type ResearchRankingResponse = {
+  subcategory: string;
+  sort_by: ResearchRankingSort;
+  sort_direction: 'asc' | 'desc';
+  formula_version: string;
+  configuration_checksum: string;
+  weights: Record<string, number>;
+  items: Array<{
+    product: ProductSummary;
+    ranking: {
+      rank: number;
+      score: number;
+      formula_version: string;
+      configuration_checksum: string;
+      components: ResearchRankingComponent[];
+      warning_codes: string[];
+    };
+  }>;
+  pagination: {
+    page: number;
+    page_size: number;
+    total_items: number;
+    total_pages: number;
+    has_previous: boolean;
+    has_next: boolean;
+  };
+};
+
+export type ResearchRankingApiResponse = Omit<ResearchRankingResponse, 'items'> & {
+  items: Array<{
+    product: ProductListItemResponse;
+    ranking: ResearchRankingResponse['items'][number]['ranking'];
+  }>;
+};
+
 export type RecommendationEvidenceResponse = {
   reason_code: string;
   polarity: 'positive' | 'negative' | 'informational';
@@ -598,6 +654,8 @@ export type CategoryCostEstimateResponse = {
     asin: string;
     title: string | null;
     brand: string | null;
+    image_url: string | null;
+    amazon_url: string | null;
     currency_code: string | null;
     selling_price: string | null;
     selling_price_source: 'buy_box_90d_average' | 'current_buy_box' | 'unavailable';

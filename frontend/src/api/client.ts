@@ -17,6 +17,9 @@ import type {
   ProductListApiResponse,
   ProductListResponse,
   ProductQuery,
+  ResearchRankingApiResponse,
+  ResearchRankingResponse,
+  ResearchRankingSort,
   TargetCostAssumptions,
   ProductEconomicsResponse,
   SupplierOffer,
@@ -32,6 +35,7 @@ import {
   normalizeImportList,
   normalizeProductDetail,
   normalizeProductList,
+  normalizeProductSummary,
 } from './normalizers';
 import type { HealthResponse } from '../types/health';
 
@@ -296,6 +300,37 @@ export function fetchCategoryCostEstimate(
       signal,
     },
   );
+}
+
+export async function fetchResearchRanking(
+  organisationId: string,
+  marketplaceId: string,
+  subcategory: string,
+  sortBy: ResearchRankingSort,
+  sortDirection: 'asc' | 'desc',
+  importBatchId?: string,
+  signal?: AbortSignal,
+): Promise<ResearchRankingResponse> {
+  const response = await request<ResearchRankingApiResponse>(
+    `/dashboard/research-ranking${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+      subcategory,
+      import_batch_id: importBatchId,
+      sort_by: sortBy,
+      sort_direction: sortDirection,
+      page: '1',
+      page_size: '100',
+    })}`,
+    { signal },
+  );
+  return {
+    ...response,
+    items: response.items.map((item) => ({
+      ...item,
+      product: normalizeProductSummary(item.product),
+    })),
+  };
 }
 
 export async function fetchProducts(

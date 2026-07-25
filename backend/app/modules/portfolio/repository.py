@@ -151,6 +151,14 @@ class PortfolioRepository:
             total_items=total_items,
         )
 
+    def list_products_for_ranking(
+        self, spec: ProductQuerySpec, *, limit: int
+    ) -> list[ProductReadRecord]:
+        """Return a deterministic bounded candidate set for pure in-process ranking."""
+        bundle = self._build_product_projection(spec.scope, import_batch_id=spec.import_batch_id)
+        statement = self._apply_filters(bundle, spec).order_by(Product.id).limit(limit)
+        return self._records(self._session.execute(statement).all())
+
     def list_risk_products(
         self,
         scope: PortfolioScope,

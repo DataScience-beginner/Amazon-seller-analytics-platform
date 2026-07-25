@@ -37,3 +37,16 @@ keeps a manual authorisation warning.
 Changing a threshold, screen meaning, status rule, brand marker or explanation semantics requires a
 new policy resource and version. API outputs include the policy version and SHA-256 configuration
 checksum so an AI agent or reviewer can replay the decision from immutable source evidence.
+
+## Research Priority Ranking v1
+
+`resources/ranking_v1.json` defines the separate `selleros.research-priority.v1` read-time ranking.
+It does not replace or mutate persisted market-opportunity scores. Its weights are demand 30%, price
+stability 20%, competition quality 15%, data confidence 15%, sales-rank trend 10% and Buy Box
+availability 10%. The loader fails closed unless every component exists and weights sum to 100.
+
+Missing components score zero and are disclosed. Competition quality caps zero- and single-offer
+listings because seller concentration can indicate unavailable supply or a controlled listing rather
+than easy entry. Each result returns the formula version, configuration checksum, component scores,
+weights and reason codes. It ranks what to research first; supplier cost, fees, authorisation and a
+human buying decision remain separate gates.

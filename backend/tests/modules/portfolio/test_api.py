@@ -120,6 +120,7 @@ def _add_product(
     title: str,
     brand: str,
     category: str,
+    subcategory: str | None = None,
     price: str,
     offers: int,
     overall_score: int,
@@ -129,6 +130,7 @@ def _add_product(
     competition_score: int = 85,
     price_stability_score: int = 85,
     monthly_bought: int | None = None,
+    image_url: str | None = None,
     observed_on: date | None = date(2026, 1, 1),
     import_batch: ImportBatch | None = None,
 ) -> Product:
@@ -140,6 +142,7 @@ def _add_product(
         title=title,
         brand=brand,
         category=category,
+        subcategory=subcategory,
     )
     session.add(product)
     session.flush()
@@ -161,6 +164,7 @@ def _add_product(
         review_count=120,
         buy_box_winner_count_90d=2,
         buy_box_oos_percentage_90d=Decimal("2.5"),
+        image_url=image_url,
         source_payload=[
             {
                 "ordinal": 11,
@@ -190,6 +194,90 @@ def _add_product(
     )
     session.flush()
     return product
+
+
+def test_research_ranking_is_global_transparent_and_marketplace_safe(
+    db_session: Session,
+) -> None:
+    organisation, marketplace = _add_workspace(
+        db_session,
+        organisation_id="organisation-ranking",
+        marketplace_id="marketplace-ranking",
+        code="IN",
+    )
+    stronger = _add_product(
+        db_session,
+        product_id="product-ranking-strong",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000RANK01",
+        title="Stronger candidate",
+        brand="Synthetic",
+        category="Toys",
+        subcategory="Cars",
+        price="999",
+        offers=3,
+        overall_score=80,
+        confidence=90,
+        strategy="test_buy",
+        demand_score=95,
+        competition_score=85,
+        price_stability_score=90,
+        monthly_bought=300,
+        image_url=("https://m.media-amazon.com/first.jpg;" "https://m.media-amazon.com/second.jpg"),
+    )
+    weaker = _add_product(
+        db_session,
+        product_id="product-ranking-weak",
+        organisation_id=organisation.id,
+        marketplace_id=marketplace.id,
+        asin="B000RANK02",
+        title="Weaker candidate",
+        brand="Synthetic",
+        category="Toys",
+        subcategory="Cars",
+        price="499",
+        offers=1,
+        overall_score=70,
+        confidence=80,
+        strategy="monitor",
+        demand_score=65,
+        competition_score=100,
+        price_stability_score=70,
+        monthly_bought=100,
+    )
+    db_session.commit()
+
+    with _api_client(db_session) as client:
+        response = client.get(
+            "/api/v1/dashboard/research-ranking",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+                "subcategory": "Cars",
+                "sort_by": "research_priority",
+                "sort_direction": "desc",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["weights"]["demand"] == 30
+    assert payload["formula_version"] == "selleros.research-priority.v1"
+    assert payload["items"][0]["product"]["product_id"] == stronger.id
+    assert payload["items"][0]["ranking"]["rank"] == 1
+    assert payload["items"][0]["product"]["image_url"] == ("https://m.media-amazon.com/first.jpg")
+    assert payload["items"][0]["product"]["amazon_url"] == ("https://www.amazon.in/dp/B000RANK01")
+    weak_payload = next(
+        item for item in payload["items"] if item["product"]["product_id"] == weaker.id
+    )
+    competition = next(
+        component
+        for component in weak_payload["ranking"]["components"]
+        if component["id"] == "competition_quality"
+    )
+    assert competition["score"] == 50
+    assert "single_seller_control_risk" in weak_payload["ranking"]["warning_codes"]
 
 
 def test_research_screens_brand_filter_and_critical_metrics(db_session: Session) -> None:

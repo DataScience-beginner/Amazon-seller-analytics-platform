@@ -116,6 +116,20 @@ The overview also returns deterministic current Buy Box bands: under 500, 500–
 denominator, and the currency label is returned only when all populated prices share one currency.
 These are selling-price distributions, not sourcing-price recommendations.
 
+`GET /api/v1/dashboard/research-ranking` calculates `selleros.research-priority.v1` across the
+complete selected subcategory before pagination, bounded to 10,000 products. Its checksummed JSON
+configuration weights Demand 30%, Price Stability 20%, Competition Quality 15%, Data Confidence 15%,
+Sales-rank Trend 10% and Buy Box Availability 10%. Every component, weight and reason code is
+returned. Missing inputs contribute zero and are never silently redistributed.
+
+Competition Quality is not simply “fewer sellers is better.” Zero-offer results are capped at 25 and
+single-offer results at 50 because either may indicate unavailable supply or a controlled branded
+listing. Alternative server sorts do not change the canonical research-priority rank.
+
+Keepa image cells may contain semicolon-separated URLs. Responses select the first valid HTTP(S)
+candidate as the thumbnail while the immutable source payload retains the complete original cell.
+Amazon links are derived only from the scoped marketplace code and validated ASIN.
+
 `GET /api/v1/dashboard/dataset-overview` accepts the same required scope plus an optional exact
 `category`. It returns the same aggregate contract for the selected category. The dashboard uses
 this endpoint together with the bounded product collection endpoint to render a category drill-down;

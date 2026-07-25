@@ -54,6 +54,20 @@ class SortDirection(StrEnum):
     descending = "desc"
 
 
+class ResearchRankingSortField(StrEnum):
+    research_priority = "research_priority"
+    demand = "demand"
+    price_stability = "price_stability"
+    competition_quality = "competition_quality"
+    data_confidence = "data_confidence"
+    sales_rank_trend = "sales_rank_trend"
+    buy_box_availability = "buy_box_availability"
+    price = "price"
+    offer_count = "offer_count"
+    monthly_demand = "monthly_demand"
+    product_title = "title"
+
+
 class PortfolioScopeQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -64,6 +78,15 @@ class PortfolioScopeQuery(BaseModel):
 class DatasetOverviewQuery(PortfolioScopeQuery):
     category: CategoryText | None = None
     import_batch_id: ScopeId | None = None
+
+
+class ResearchRankingQuery(PortfolioScopeQuery):
+    subcategory: CategoryText
+    import_batch_id: ScopeId | None = None
+    sort_by: ResearchRankingSortField = ResearchRankingSortField.research_priority
+    sort_direction: SortDirection = SortDirection.descending
+    page: Annotated[int, Field(ge=1)] = 1
+    page_size: Annotated[int, Field(ge=1, le=100)] = 25
 
 
 class ProductListQuery(PortfolioScopeQuery):
@@ -262,6 +285,40 @@ class ProductListResponse(BaseModel):
     screens: list[ResearchScreenResponse]
 
 
+class ResearchRankingComponentResponse(BaseModel):
+    id: str
+    label: str
+    weight: int
+    score: ScoreValue
+    reason_code: str
+
+
+class ResearchPriorityResponse(BaseModel):
+    rank: int
+    score: ScoreValue
+    formula_version: str
+    configuration_checksum: str
+    components: list[ResearchRankingComponentResponse]
+    warning_codes: list[str]
+
+
+class ResearchRankingProductResponse(BaseModel):
+    product: ProductSummaryResponse
+    ranking: ResearchPriorityResponse
+
+
+class ResearchRankingResponse(BaseModel):
+    scope: ScopeResponse
+    subcategory: str
+    sort_by: ResearchRankingSortField
+    sort_direction: SortDirection
+    formula_version: str
+    configuration_checksum: str
+    weights: dict[str, int]
+    items: list[ResearchRankingProductResponse]
+    pagination: PaginationResponse
+
+
 class DataNoticeResponse(BaseModel):
     code: str
     severity: Literal["missing", "warning"]
@@ -422,6 +479,8 @@ class TargetCostProductResponse(BaseModel):
     asin: str
     title: str | None
     brand: str | None
+    image_url: str | None
+    amazon_url: str | None
     currency_code: str | None
     selling_price: Decimal | None
     selling_price_source: Literal["buy_box_90d_average", "current_buy_box", "unavailable"]

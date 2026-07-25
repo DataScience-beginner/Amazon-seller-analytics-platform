@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
 
+from app.core.errors import ConflictError
 from app.models.domain import (
     ImportBatch,
     ProductSnapshot,
@@ -50,6 +51,12 @@ from app.modules.portfolio.schemas import (
     RecommendationEvidenceResponse,
     RecommendationResponse,
     ResearchAssessmentResponse,
+    ResearchPriorityResponse,
+    ResearchRankingComponentResponse,
+    ResearchRankingProductResponse,
+    ResearchRankingQuery,
+    ResearchRankingResponse,
+    ResearchRankingSortField,
     ResearchScreenResponse,
     ScopeResponse,
     ScoreResponse,
@@ -74,6 +81,12 @@ from app.modules.research import (
     classify_research_product,
     load_default_research_policy,
 )
+from app.modules.research.ranking import (
+    RankingSignals,
+    ResearchPriorityRanking,
+    load_default_ranking_config,
+    rank_research_priority,
+)
 from app.modules.scoring.config import load_default_scoring_config
 from app.modules.scoring.types import ScoreName
 from app.modules.strategies.models import Strategy
@@ -87,6 +100,7 @@ _SCORE_ORDER = {
     "overall_opportunity": 4,
 }
 _MONTHLY_BOUGHT_SOURCE_HEADER = "Monthly Sales Trends: Bought in past month"
+_RESEARCH_RANKING_LIMIT = 10_000
 
 _AMAZON_DOMAINS = {
     "AE": "www.amazon.ae",
@@ -220,6 +234,100 @@ class PortfolioService:
                 )
                 for screen in self._research_policy.screens.values()
             ],
+        )
+
+    def research_ranking(self, query: ResearchRankingQuery) -> ResearchRankingResponse:
+        scope = _scope(query)
+        marketplace = self._repository.ensure_scope(scope)
+        records = self._repository.list_products_for_ranking(
+            ProductQuerySpec(
+                scope=scope,
+                import_batch_id=query.import_batch_id,
+                subcategory=query.subcategory,
+                require_confirmed_observation=True,
+            ),
+            limit=_RESEARCH_RANKING_LIMIT + 1,
+        )
+        if len(records) > _RESEARCH_RANKING_LIMIT:
+            raise ConflictError(
+                "research_ranking_scope_too_large",
+                "The selected subcategory exceeds the bounded research-ranking limit",
+                details={"limit": _RESEARCH_RANKING_LIMIT},
+            )
+        config = load_default_ranking_config()
+        ranked = [
+            (
+                record,
+                rank_research_priority(_ranking_signals(record), config),
+            )
+            for record in records
+        ]
+        canonical = sorted(
+            ranked,
+            key=lambda item: (
+                -item[1].score,
+                (item[0].product.title or "").casefold(),
+                item[0].product.asin,
+                item[0].product.id,
+            ),
+        )
+        rank_by_product_id = {
+            record.product.id: index for index, (record, _) in enumerate(canonical, start=1)
+        }
+        if query.sort_by is ResearchRankingSortField.product_title:
+            ranked = list(canonical)
+            ranked.sort(
+                key=lambda item: (item[0].product.title or "").casefold(),
+                reverse=query.sort_direction.value == "desc",
+            )
+        else:
+            available = [
+                item
+                for item in canonical
+                if _research_ranking_numeric_sort_value(item, query.sort_by) is not None
+            ]
+            missing = [
+                item
+                for item in canonical
+                if _research_ranking_numeric_sort_value(item, query.sort_by) is None
+            ]
+            available.sort(
+                key=lambda item: _required_research_ranking_numeric_sort_value(item, query.sort_by),
+                reverse=query.sort_direction.value == "desc",
+            )
+            ranked = available + missing
+        total_items = len(ranked)
+        total_pages = (total_items + query.page_size - 1) // query.page_size if total_items else 0
+        start = (query.page - 1) * query.page_size
+        page_items = ranked[start : start + query.page_size]
+        return ResearchRankingResponse(
+            scope=_scope_response(scope),
+            subcategory=query.subcategory,
+            sort_by=query.sort_by,
+            sort_direction=query.sort_direction,
+            formula_version=config.formula_version,
+            configuration_checksum=config.configuration_checksum,
+            weights=config.weights,
+            items=[
+                ResearchRankingProductResponse(
+                    product=_product_summary(
+                        record,
+                        marketplace.code,
+                        self._confidence_threshold,
+                        self._research_policy,
+                    ),
+                    ranking=_ranking_response(rank_by_product_id[record.product.id], ranking),
+                )
+                for record, ranking in page_items
+            ],
+            pagination=PaginationResponse(
+                page=query.page,
+                page_size=query.page_size,
+                total_items=total_items,
+                total_pages=total_pages,
+                has_previous=query.page > 1 and total_items > 0,
+                has_next=query.page < total_pages,
+            ),
         )
 
     def get_product(
@@ -406,7 +514,7 @@ class PortfolioService:
         request: TargetCostAssumptionsRequest,
     ) -> CategoryCostEstimateResponse:
         scope = _scope(query)
-        self._repository.ensure_scope(scope)
+        marketplace = self._repository.ensure_scope(scope)
         assumptions = TargetCostAssumptions(
             gst_rate_percent=request.gst_rate_percent,
             amazon_fee_percent=request.amazon_fee_percent,
@@ -453,6 +561,11 @@ class PortfolioService:
                     asin=record.product.asin,
                     title=record.product.title,
                     brand=record.product.brand,
+                    image_url=_safe_http_url(
+                        record.product.image_url
+                        or (snapshot.image_url if snapshot is not None else None)
+                    ),
+                    amazon_url=_amazon_url(marketplace.code, record.product.asin),
                     currency_code=snapshot.currency_code if snapshot is not None else None,
                     selling_price=price,
                     selling_price_source=source,
@@ -686,10 +799,11 @@ def _scope_response(scope: PortfolioScope) -> ScopeResponse:
 def _safe_http_url(value: str | None) -> str | None:
     if not value:
         return None
-    parsed = urlsplit(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username:
-        return None
-    return value
+    for candidate in (part.strip() for part in value.split(";")):
+        parsed = urlsplit(candidate)
+        if parsed.scheme in {"http", "https"} and parsed.netloc and not parsed.username:
+            return candidate
+    return None
 
 
 def _amazon_url(marketplace_code: str, asin: str) -> str | None:
@@ -699,6 +813,96 @@ def _amazon_url(marketplace_code: str, asin: str) -> str | None:
     if domain is None or len(normalized_asin) != 10 or not normalized_asin.isalnum():
         return None
     return f"https://{domain}/dp/{normalized_asin}"
+
+
+def _ranking_signals(record: ProductReadRecord) -> RankingSignals:
+    snapshot = record.snapshot
+    return RankingSignals(
+        demand_score=record.demand_score.score_value if record.demand_score else None,
+        price_stability_score=(
+            record.price_stability_score.score_value if record.price_stability_score else None
+        ),
+        competition_score=(
+            record.competition_score.score_value if record.competition_score else None
+        ),
+        data_confidence_score=(
+            record.confidence_score.score_value if record.confidence_score else None
+        ),
+        sales_rank=snapshot.sales_rank if snapshot else None,
+        sales_rank_90d=snapshot.sales_rank_90d if snapshot else None,
+        offer_count=record.offer_count,
+        buy_box_price_available=bool(snapshot and snapshot.buy_box_price is not None),
+        buy_box_oos_percentage_90d=(snapshot.buy_box_oos_percentage_90d if snapshot else None),
+    )
+
+
+def _ranking_component_score(ranking: ResearchPriorityRanking, component_id: str) -> int:
+    return next(component.score for component in ranking.components if component.id == component_id)
+
+
+def _research_ranking_numeric_sort_value(
+    item: tuple[ProductReadRecord, ResearchPriorityRanking],
+    sort_by: ResearchRankingSortField,
+) -> Decimal | None:
+    record, ranking = item
+    snapshot = record.snapshot
+    numeric: dict[ResearchRankingSortField, int | Decimal | None] = {
+        ResearchRankingSortField.research_priority: ranking.score,
+        ResearchRankingSortField.demand: _ranking_component_score(ranking, "demand"),
+        ResearchRankingSortField.price_stability: _ranking_component_score(
+            ranking, "price_stability"
+        ),
+        ResearchRankingSortField.competition_quality: _ranking_component_score(
+            ranking, "competition_quality"
+        ),
+        ResearchRankingSortField.data_confidence: _ranking_component_score(
+            ranking, "data_confidence"
+        ),
+        ResearchRankingSortField.sales_rank_trend: _ranking_component_score(
+            ranking, "sales_rank_trend"
+        ),
+        ResearchRankingSortField.buy_box_availability: _ranking_component_score(
+            ranking, "buy_box_availability"
+        ),
+        ResearchRankingSortField.price: snapshot.buy_box_price if snapshot else None,
+        ResearchRankingSortField.offer_count: record.offer_count,
+        ResearchRankingSortField.monthly_demand: (
+            _estimated_monthly_bought(snapshot) if snapshot else None
+        ),
+        ResearchRankingSortField.product_title: None,
+    }
+    value = numeric[sort_by]
+    return Decimal(value) if isinstance(value, int) else value
+
+
+def _required_research_ranking_numeric_sort_value(
+    item: tuple[ProductReadRecord, ResearchPriorityRanking],
+    sort_by: ResearchRankingSortField,
+) -> Decimal:
+    value = _research_ranking_numeric_sort_value(item, sort_by)
+    if value is None:
+        raise ValueError("A missing ranking sort value entered the available partition")
+    return value
+
+
+def _ranking_response(rank: int, ranking: ResearchPriorityRanking) -> ResearchPriorityResponse:
+    return ResearchPriorityResponse(
+        rank=rank,
+        score=ranking.score,
+        formula_version=ranking.formula_version,
+        configuration_checksum=ranking.configuration_checksum,
+        components=[
+            ResearchRankingComponentResponse(
+                id=component.id,
+                label=component.label,
+                weight=component.weight,
+                score=component.score,
+                reason_code=component.reason_code,
+            )
+            for component in ranking.components
+        ],
+        warning_codes=list(ranking.warning_codes),
+    )
 
 
 def _evidence_scalar(value: object) -> str | int | Decimal | bool | None:

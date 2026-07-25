@@ -29,11 +29,13 @@ export function normalizeImportDetail(response: ImportDetailApiResponse): Import
     status: response.status,
     duplicate: response.duplicate,
     uploaded_at: response.uploaded_at,
+    confirmed_at: response.confirmed_at,
     completed_at: response.completed_at,
     row_count: response.summary?.total,
     column_count: response.mapping.columns.length,
     selected_sheet: response.workbook.sheet_name ?? undefined,
     header_row: response.workbook.header_row_number ?? undefined,
+    dataset: response.dataset,
     mapping: {
       registry_id: response.mapping.registry_id,
       registry_version: response.mapping.registry_version,
@@ -60,6 +62,9 @@ export function normalizeImportList(response: ImportListApiResponse): ImportList
       status: item.status,
       uploaded_at: item.uploaded_at,
       completed_at: item.completed_at,
+      observed_on: item.observed_on,
+      period_month: item.period_month,
+      revision: item.revision,
       row_count: item.summary?.total,
       summary: item.summary ?? undefined,
     })),
@@ -108,6 +113,7 @@ function snapshot(response: ProductSnapshotResponse): Snapshot {
   return {
     id: response.id,
     snapshot_at: response.snapshot_at,
+    observed_on: response.observed_on,
     metrics: response.metrics,
     scores: response.scores.map(score),
     recommendation: recommendation(response.recommendation),
@@ -159,6 +165,7 @@ export function normalizeProductSummary(item: ProductListItemResponse): ProductS
         ? { amount: item.buy_box_price, currency_code: item.currency_code }
         : null,
     latest_snapshot_at: item.latest_snapshot_at,
+    latest_observed_on: item.latest_observed_on,
   };
 }
 
@@ -199,6 +206,9 @@ export function normalizeDashboard(response: DashboardApiResponse): DashboardRes
           status: response.latest_import.status,
           uploaded_at: response.latest_import.uploaded_at,
           completed_at: response.latest_import.completed_at,
+          observed_on: response.latest_import.observed_on,
+          period_month: response.latest_import.period_month,
+          revision: response.latest_import.revision,
         }
       : null,
     strategy_distribution: response.strategy_distribution,
@@ -237,6 +247,7 @@ export function normalizeProductDetail(response: ProductDetailApiResponse): Prod
     image_url: response.product.image_url,
     amazon_url: response.product.amazon_url,
     latest_snapshot_at: latest?.snapshot_at ?? null,
+    latest_observed_on: latest?.observed_on ?? null,
     strategy: currentRecommendation?.strategy,
     recommendation: currentRecommendation,
     scores: latest?.scores.map(score) ?? [],

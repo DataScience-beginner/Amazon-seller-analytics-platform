@@ -41,6 +41,36 @@ const emptyDashboard = {
   },
 };
 
+const datedDashboard = {
+  ...emptyDashboard,
+  tracked_product_count: 1,
+  kpis: [
+    {
+      id: 'tracked_products',
+      label: 'Tracked products',
+      value: 1,
+      unit: 'products',
+      definition: 'Products with a latest snapshot.',
+    },
+  ],
+  latest_import: {
+    id: 'import-1',
+    original_filename: 'keepa.xlsx',
+    status: 'completed',
+    uploaded_at: '2026-07-19T10:00:00Z',
+    completed_at: '2026-07-19T10:02:00Z',
+    observed_on: '2026-05-26',
+    period_month: '2026-05-01',
+    revision: 1,
+    total_rows: 1,
+    created_rows: 1,
+    matched_rows: 0,
+    skipped_rows: 0,
+    failed_rows: 0,
+  },
+  empty_state: null,
+};
+
 const readyHealth = {
   status: 'ok',
   application: 'SellerOS',
@@ -124,6 +154,24 @@ describe('AppShell', () => {
     await waitFor(() => expect(workspacesCreated).toBe(true));
     expect(await screen.findByRole('heading', { name: 'Portfolio overview' })).toBeInTheDocument();
     expect(screen.getByLabelText('Active workspace')).toHaveValue('org-1:market-1');
+  });
+
+  it('keeps the latest dataset date separate from its upload timestamp', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/health')) return json(readyHealth);
+      if (url.endsWith('/workspaces')) return json({ items: [workspace] });
+      if (url.includes('/dashboard?')) return json(datedDashboard);
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: 'Latest import' })).toBeInTheDocument();
+    expect(screen.getByText('Observed on').nextElementSibling).toHaveTextContent('May 26, 2026');
+    expect(screen.getByText('Dataset month').nextElementSibling).toHaveTextContent('May 2026');
+    expect(screen.getByText('Uploaded').nextElementSibling).toHaveTextContent('Jul 19, 2026');
   });
 
   it('keeps the loading state until the system health check is verified', async () => {

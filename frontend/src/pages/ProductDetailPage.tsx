@@ -105,8 +105,12 @@ export function ProductDetailPage({ productId }: { productId: string }) {
               <dd>{recommendation.formula_version ?? 'Not provided'}</dd>
             </div>
             <div>
-              <dt>Latest evidence</dt>
-              <dd>{formatDate(product.latest_snapshot_at)}</dd>
+              <dt>Observed on</dt>
+              <dd>
+                {product.latest_observed_on
+                  ? formatDate(product.latest_observed_on)
+                  : 'Observation date unavailable'}
+              </dd>
             </div>
           </dl>
         </section>
@@ -246,7 +250,8 @@ export function ProductDetailPage({ productId }: { productId: string }) {
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Captured</th>
+                  <th scope="col">Observed on</th>
+                  <th scope="col">Imported</th>
                   <th scope="col">Recommendation</th>
                   <th scope="col">Overall score</th>
                   <th scope="col">Formula</th>
@@ -259,6 +264,11 @@ export function ProductDetailPage({ productId }: { productId: string }) {
                   );
                   return (
                     <tr key={snapshot.id}>
+                      <td>
+                        {snapshot.observed_on
+                          ? formatDate(snapshot.observed_on)
+                          : 'Observation date unavailable'}
+                      </td>
                       <td>{formatDate(snapshot.captured_at ?? snapshot.snapshot_at)}</td>
                       <td>
                         {snapshot.recommendation ? (

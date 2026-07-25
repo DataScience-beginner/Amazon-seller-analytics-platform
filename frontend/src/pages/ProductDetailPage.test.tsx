@@ -58,6 +58,7 @@ const snapshot = {
   import_batch_id: 'import-1',
   snapshot_kind: 'keepa_import',
   snapshot_at: '2026-07-19T10:00:00Z',
+  observed_on: '2026-05-26',
   metrics: {
     buy_box_price: '1299.00',
     buy_box_price_90d: '1320.00',
@@ -133,6 +134,7 @@ describe('ProductDetailPage', () => {
             {
               snapshot_id: 'snapshot-1',
               snapshot_at: '2026-07-19T10:00:00Z',
+              observed_on: '2026-05-26',
               strategy: 'growth',
               confidence: 88,
               rules_version: '1.0.0',
@@ -172,6 +174,9 @@ describe('ProductDetailPage', () => {
       'href',
       '/planning?product_id=product-1',
     );
+    expect(screen.getAllByText('May 26, 2026').length).toBeGreaterThan(0);
+    expect(screen.getByRole('columnheader', { name: 'Observed on' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Imported' })).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 

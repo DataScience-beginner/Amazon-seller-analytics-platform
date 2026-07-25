@@ -259,9 +259,17 @@ export function TestBuyPlanner({
                     : 'Missing · no calculated confidence is available'}
                 </dd>
               </div>
+              <div>
+                <dt>Market observed on</dt>
+                <dd>
+                  {state.recommendation.evidence.market_observed_on
+                    ? formatDate(state.recommendation.evidence.market_observed_on)
+                    : 'Observation date unavailable'}
+                </dd>
+              </div>
               {state.recommendation.evidence.market_snapshot_at && (
                 <div>
-                  <dt>Market snapshot at</dt>
+                  <dt>Evidence processed</dt>
                   <dd>{formatDate(state.recommendation.evidence.market_snapshot_at)}</dd>
                 </div>
               )}

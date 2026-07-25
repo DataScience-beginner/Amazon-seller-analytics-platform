@@ -8,7 +8,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ProductSummaryRow } from '../components/ProductSummaryRow';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
-import { formatDate, formatNumber, humanize } from '../utils/format';
+import { formatDate, formatMonth, formatNumber, humanize } from '../utils/format';
 
 export function DashboardPage() {
   const { selection } = useWorkspace();
@@ -115,13 +115,32 @@ export function DashboardPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt>Completed</dt>
+                    <dt>Dataset month</dt>
                     <dd>
-                      {formatDate(
-                        state.data.latest_import.completed_at ??
-                          state.data.latest_import.uploaded_at,
-                      )}
+                      {state.data.latest_import.period_month
+                        ? formatMonth(state.data.latest_import.period_month)
+                        : 'Observation date unavailable'}
                     </dd>
+                  </div>
+                  <div>
+                    <dt>Observed on</dt>
+                    <dd>
+                      {state.data.latest_import.observed_on
+                        ? formatDate(state.data.latest_import.observed_on)
+                        : 'Observation date unavailable'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Revision</dt>
+                    <dd>{state.data.latest_import.revision ?? 'Not available'}</dd>
+                  </div>
+                  <div>
+                    <dt>Uploaded</dt>
+                    <dd>{formatDate(state.data.latest_import.uploaded_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Completed</dt>
+                    <dd>{formatDate(state.data.latest_import.completed_at)}</dd>
                   </div>
                 </dl>
               ) : (

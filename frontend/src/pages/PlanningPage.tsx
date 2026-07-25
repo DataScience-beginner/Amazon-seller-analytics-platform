@@ -139,7 +139,7 @@ export function PlanningPage() {
       marketplace_id: marketplaceId,
       page: '1',
       page_size: '100',
-      sort_by: 'snapshot_at',
+      sort_by: 'observed_on',
       sort_direction: 'desc',
     }),
     [marketplaceId, organisationId],

@@ -7,8 +7,13 @@ import { useWorkspace } from '../app/workspace';
 import { ErrorState, LoadingState } from '../components/Feedback';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
+import {
+  DatasetConfirmationPanel,
+  observedOnError,
+} from '../features/imports/DatasetConfirmationPanel';
+import { MappingReview } from '../features/imports/MappingReview';
 import { useAsync } from '../hooks/useAsync';
-import { formatDate, formatNumber, humanize } from '../utils/format';
+import { formatDate, formatMonth, formatNumber, formatUtcDateInput } from '../utils/format';
 
 function normalizedStatus(batch: ImportBatch): string {
   return batch.status.toLowerCase().replace(/[_-]+/g, ' ');
@@ -62,18 +67,27 @@ export function ImportDetailPage({ importId }: { importId: string }) {
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [observedOn, setObservedOn] = useState('');
+  const [dateAcknowledged, setDateAcknowledged] = useState(false);
+  const today = formatUtcDateInput();
 
   useEffect(() => {
     if (!loadedBatch) return;
     const loadedColumns = loadedBatch.mapping?.columns ?? loadedBatch.columns ?? [];
     setMappings(mappingsFrom(loadedColumns));
     const status = normalizedStatus(loadedBatch);
-    setMappingSaved(status === 'completed');
+    setMappingSaved(status === 'completed' || !loadedBatch.mapping?.requires_confirmation);
+    setObservedOn(
+      loadedBatch.dataset?.observed_on ?? loadedBatch.dataset?.observed_on_suggestion ?? '',
+    );
+    setDateAcknowledged(status === 'completed');
   }, [loadedBatch]);
 
   useEffect(() => {
     setBatchOverride(null);
     setActionError(null);
+    setObservedOn('');
+    setDateAcknowledged(false);
   }, [importId, marketplaceId, organisationId]);
 
   const selectedFields = new Set(Object.values(mappings).filter(Boolean));
@@ -86,7 +100,8 @@ export function ImportDetailPage({ importId }: { importId: string }) {
   const unresolvedAmbiguous = columns.filter(
     (column) => column.classification === 'ambiguous' && !mappings[String(column.ordinal)],
   );
-  const canConfirm = missingRequired.length === 0 && unresolvedAmbiguous.length === 0;
+  const mappingComplete = missingRequired.length === 0 && unresolvedAmbiguous.length === 0;
+  const mappingReady = mappingComplete && mappingSaved;
 
   async function saveMapping(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,10 +126,11 @@ export function ImportDetailPage({ importId }: { importId: string }) {
   }
 
   async function confirm() {
+    if (observedOnError(observedOn, today) || !dateAcknowledged || !mappingReady) return;
     setConfirming(true);
     setActionError(null);
     try {
-      const response = await confirmImport(importId, organisationId, marketplaceId);
+      const response = await confirmImport(importId, organisationId, marketplaceId, observedOn);
       setBatchOverride(response);
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : 'Unable to confirm import');
@@ -135,6 +151,9 @@ export function ImportDetailPage({ importId }: { importId: string }) {
   );
   const completed = status === 'completed';
   const failed = status === 'failed';
+  const legacyUndatedDataset =
+    batch.dataset?.date_status === 'legacy_unconfirmed' ||
+    (completed && !batch.dataset?.date_status && !batch.dataset?.observed_on);
 
   return (
     <>
@@ -144,7 +163,7 @@ export function ImportDetailPage({ importId }: { importId: string }) {
       <PageHeader
         eyebrow="Import inspection"
         title={batch.original_filename ?? batch.filename ?? `Import ${batch.id}`}
-        description="Review how source evidence maps to SellerOS before any product snapshot is created."
+        description="Confirm when the market evidence was observed. The upload time remains separate for auditing."
         action={<StatusBadge value={batch.status} />}
       />
 
@@ -154,12 +173,31 @@ export function ImportDetailPage({ importId }: { importId: string }) {
           <strong>{formatDate(batch.uploaded_at ?? batch.created_at)}</strong>
         </div>
         <div>
-          <span>Sheet</span>
-          <strong>{batch.selected_sheet ?? 'Detected automatically'}</strong>
+          <span>Observed on</span>
+          <strong>
+            {batch.dataset?.observed_on
+              ? formatDate(batch.dataset.observed_on)
+              : 'Observation date unavailable'}
+          </strong>
         </div>
         <div>
-          <span>Header row</span>
-          <strong>{formatNumber(batch.header_row, 0)}</strong>
+          <span>Dataset month</span>
+          <strong>
+            {batch.dataset?.period_month
+              ? formatMonth(batch.dataset.period_month)
+              : 'Observation date unavailable'}
+          </strong>
+        </div>
+        <div>
+          <span>Source model</span>
+          <strong>
+            {batch.dataset?.schema_id ?? 'Not registered'} ·{' '}
+            {batch.dataset?.schema_version ?? 'No version'}
+          </strong>
+        </div>
+        <div>
+          <span>Sheet</span>
+          <strong>{batch.selected_sheet ?? 'Detected automatically'}</strong>
         </div>
         <div>
           <span>Checksum</span>
@@ -183,8 +221,23 @@ export function ImportDetailPage({ importId }: { importId: string }) {
 
       {completed && batch.summary && (
         <section className="panel" aria-labelledby="summary-heading">
-          <p className="data-label">Transactional result</p>
-          <h2 id="summary-heading">Import summary</h2>
+          <p className="data-label">Immutable monthly evidence</p>
+          <h2 id="summary-heading">
+            {legacyUndatedDataset
+              ? 'Legacy dataset — observation date unavailable'
+              : `${formatMonth(batch.dataset?.period_month)} dataset created`}
+          </h2>
+          <p>
+            {legacyUndatedDataset ? (
+              <>No observation date was recorded for this historical import. </>
+            ) : (
+              <>
+                Observed on <strong>{formatDate(batch.dataset?.observed_on)}</strong>.{' '}
+              </>
+            )}
+            Uploaded {formatDate(batch.uploaded_at)} · revision{' '}
+            {batch.dataset?.revision ?? 'Not available'}
+          </p>
           <div className="summary-grid">
             <div>
               <span>New products</span>
@@ -204,7 +257,7 @@ export function ImportDetailPage({ importId }: { importId: string }) {
             </div>
           </div>
           <p className="form-message form-message--success" role="status">
-            Import confirmed. Previous snapshots remain unchanged.
+            Dataset confirmed. Previous monthly snapshots remain unchanged.
           </p>
           <Link className="button" to="/products">
             Review product recommendations
@@ -214,102 +267,46 @@ export function ImportDetailPage({ importId }: { importId: string }) {
 
       {!completed && !failed && (
         <>
-          <section className="panel" aria-labelledby="mapping-heading">
-            <div className="section-heading">
-              <div>
-                <p className="data-label">Versioned mapping</p>
-                <h2 id="mapping-heading">Confirm column mapping</h2>
-                <p>
-                  Registry {batch.mapping?.registry_id ?? 'Keepa'}{' '}
-                  {batch.mapping?.registry_version ?? ''}
-                </p>
-              </div>
+          {batch.dataset ? (
+            <DatasetConfirmationPanel
+              dataset={batch.dataset}
+              columns={columns}
+              observedOn={observedOn}
+              today={today}
+              acknowledged={dateAcknowledged}
+              mappingReady={mappingReady}
+              confirming={confirming}
+              actionError={actionError}
+              onObservedOnChange={(value) => {
+                setObservedOn(value);
+                setDateAcknowledged(false);
+              }}
+              onAcknowledgedChange={setDateAcknowledged}
+              onConfirm={confirm}
+            />
+          ) : (
+            <div className="form-message form-message--error" role="alert">
+              Dataset metadata is unavailable. Do not confirm this import.
             </div>
-            {columns.length === 0 ? (
-              <div className="form-message form-message--error" role="alert">
-                No readable columns were detected in this workbook.
-              </div>
-            ) : (
-              <form onSubmit={saveMapping}>
-                <div className="mapping-list">
-                  {columns.map((column) => {
-                    const candidateOptions = canonicalFields;
-                    return (
-                      <div className="mapping-row" key={column.ordinal}>
-                        <div>
-                          <strong>{column.header || `Column ${column.ordinal}`}</strong>
-                          <span>
-                            Source column {column.ordinal} ·{' '}
-                            <StatusBadge value={column.classification} />
-                          </span>
-                          {column.samples && column.samples.length > 0 && (
-                            <small>
-                              Examples: {column.samples.slice(0, 3).map(previewValue).join(', ')}
-                            </small>
-                          )}
-                        </div>
-                        <label className="field">
-                          <span>
-                            SellerOS field for {column.header || `column ${column.ordinal}`}
-                          </span>
-                          <select
-                            value={mappings[String(column.ordinal)] ?? ''}
-                            onChange={(event) => {
-                              setMappings((current) => ({
-                                ...current,
-                                [String(column.ordinal)]: event.target.value,
-                              }));
-                              setMappingSaved(false);
-                            }}
-                          >
-                            <option value="">Preserve as an unknown field</option>
-                            {candidateOptions.map((option) => (
-                              <option value={option} key={option}>
-                                {humanize(option)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                    );
-                  })}
-                </div>
-                {missingRequired.length > 0 && (
-                  <div className="form-message form-message--error" role="alert">
-                    Required fields still need a source column:{' '}
-                    {missingRequired.map(humanize).join(', ')}.
-                  </div>
-                )}
-                {unresolvedAmbiguous.length > 0 && (
-                  <div className="form-message form-message--warning" role="status">
-                    Resolve {unresolvedAmbiguous.length} ambiguous mapping
-                    {unresolvedAmbiguous.length === 1 ? '' : 's'} before confirming.
-                  </div>
-                )}
-                {actionError && (
-                  <div className="form-message form-message--error" role="alert">
-                    {actionError}
-                  </div>
-                )}
-                <div className="form-actions">
-                  <button className="button button--secondary" type="submit" disabled={saving}>
-                    {saving ? 'Saving mapping…' : 'Save mapping'}
-                  </button>
-                  <button
-                    className="button"
-                    type="button"
-                    disabled={!canConfirm || !mappingSaved || confirming}
-                    onClick={confirm}
-                  >
-                    {confirming ? 'Importing rows…' : 'Confirm and create snapshots'}
-                  </button>
-                </div>
-                {!mappingSaved && canConfirm && (
-                  <p className="muted">Save the mapping before confirming the import.</p>
-                )}
-              </form>
-            )}
-          </section>
+          )}
+
+          <MappingReview
+            columns={columns}
+            canonicalFields={canonicalFields}
+            mappings={mappings}
+            missingRequired={missingRequired}
+            unresolvedAmbiguous={unresolvedAmbiguous}
+            mappingSaved={mappingSaved}
+            saving={saving}
+            onMappingChange={(ordinal, canonicalField) => {
+              setMappings((current) => ({
+                ...current,
+                [String(ordinal)]: canonicalField,
+              }));
+              setMappingSaved(false);
+            }}
+            onSave={saveMapping}
+          />
 
           <section className="panel" aria-labelledby="preview-heading">
             <div className="section-heading">

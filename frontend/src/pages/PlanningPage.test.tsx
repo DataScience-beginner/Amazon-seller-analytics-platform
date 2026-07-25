@@ -55,7 +55,7 @@ const productList = {
   query: {
     page: 1,
     page_size: 100,
-    sort_by: 'snapshot_at',
+    sort_by: 'observed_on',
     sort_direction: 'desc',
   },
 };
@@ -69,6 +69,7 @@ const economics = {
     evidence_label: 'observed',
     source: 'keepa_import',
     source_at: '2026-07-18T10:00:00Z',
+    observed_on: '2026-05-26',
   },
   currency_code: 'INR',
   profile_source: null,
@@ -229,6 +230,7 @@ describe('PlanningPage', () => {
                 monthly_demand_label: 'estimated',
                 monthly_demand_source: 'keepa_monthly_sold',
                 market_snapshot_at: '2026-07-18T10:00:00Z',
+                market_observed_on: '2026-05-26',
                 data_confidence_score_result_id: 'score-result-1',
                 data_confidence_score: 82,
                 data_confidence_label: 'calculated',

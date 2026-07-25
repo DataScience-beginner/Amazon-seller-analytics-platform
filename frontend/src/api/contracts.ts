@@ -26,12 +26,15 @@ export type ImportStatus = 'pending' | 'completed' | 'failed';
 
 export type ColumnClassification = 'required' | 'optional' | 'unknown' | 'missing' | 'ambiguous';
 
+export type DatasetColumnClassification = 'registered_source' | 'unrecognized';
+
 export type ImportColumnMapping = {
   ordinal: number;
   header: string;
   normalized_header?: string;
   canonical_field?: string | null;
   classification: ColumnClassification;
+  dataset_classification: DatasetColumnClassification;
   candidates?: string[];
   required_candidates?: string[];
   samples?: unknown[];
@@ -51,6 +54,30 @@ export type ImportMappingReport = {
   requires_confirmation?: boolean;
 };
 
+export type ImportDatasetMetadata = {
+  schema_id: string | null;
+  schema_version: string | null;
+  schema_match: string;
+  source_column_count: number;
+  registered_column_count: number;
+  matched_column_count: number;
+  new_headers: string[];
+  missing_headers: string[];
+  source_header_checksum: string | null;
+  dataset_schema_checksum: string;
+  observed_on: string | null;
+  period_month: string | null;
+  revision: number | null;
+  date_status: 'pending_confirmation' | 'confirmed' | 'legacy_unconfirmed';
+  observed_on_suggestion: string | null;
+  suggestion_source: string | null;
+  observation_date_candidates: Array<{
+    date: string;
+    source: string;
+  }>;
+  observed_on_source: string | null;
+};
+
 export type ImportDetailApiResponse = {
   id: string;
   organisation_id: string;
@@ -61,6 +88,7 @@ export type ImportDetailApiResponse = {
   uploaded_at: string;
   confirmed_at: string | null;
   completed_at: string | null;
+  dataset: ImportDatasetMetadata;
   workbook: {
     sheet_name: string | null;
     header_row_number: number | null;
@@ -95,6 +123,9 @@ export type ImportListApiResponse = {
     status: ImportStatus;
     uploaded_at: string;
     completed_at: string | null;
+    observed_on: string | null;
+    period_month: string | null;
+    revision: number | null;
     summary: (ImportSummary & { total: number; row_error_count: number }) | null;
   }>;
 };
@@ -117,12 +148,17 @@ export type ImportBatch = {
   status: ImportStatus;
   created_at?: string;
   uploaded_at?: string;
+  confirmed_at?: string | null;
   completed_at?: string | null;
+  observed_on?: string | null;
+  period_month?: string | null;
+  revision?: number | null;
   row_count?: number;
   column_count?: number;
   selected_sheet?: string;
   sheet_names?: string[];
   header_row?: number;
+  dataset?: ImportDatasetMetadata;
   mapping?: ImportMappingReport;
   columns?: ImportColumnMapping[];
   preview_rows?: Array<Record<string, unknown>>;
@@ -138,6 +174,10 @@ export type ImportListResponse = {
 
 export type ImportMappingRequest = {
   mappings: Record<string, string | null>;
+};
+
+export type ConfirmImportRequest = {
+  observed_on: string;
 };
 
 export type ScoreName =
@@ -187,6 +227,7 @@ export type ProductSummary = {
   offer_count?: number | null;
   buy_box_price?: MoneyValue | number | string | null;
   latest_snapshot_at?: string | null;
+  latest_observed_on?: string | null;
 };
 
 export type ProductListResponse = {
@@ -217,6 +258,7 @@ export type ProductListItemResponse = {
   amazon_url: string | null;
   latest_snapshot_id: string | null;
   latest_snapshot_at: string | null;
+  latest_observed_on: string | null;
   buy_box_price: string | null;
   currency_code: string | null;
   offer_count: number | null;
@@ -281,6 +323,7 @@ export type ProductSnapshotResponse = {
   import_batch_id: string | null;
   snapshot_kind: string;
   snapshot_at: string;
+  observed_on?: string | null;
   metrics: Record<string, unknown>;
   scores: ScoreResponse[];
   recommendation: RecommendationResponse | null;
@@ -310,6 +353,7 @@ export type ProductDetailApiResponse = {
   strategy_history: Array<{
     snapshot_id: string;
     snapshot_at: string;
+    observed_on: string | null;
     strategy: string;
     confidence: number;
     rules_version: string;
@@ -321,6 +365,7 @@ export type Snapshot = {
   id: string;
   captured_at?: string;
   snapshot_at?: string;
+  observed_on?: string | null;
   metrics?: Record<string, unknown>;
   scores?: Score[];
   recommendation?: Recommendation;
@@ -349,6 +394,9 @@ export type LatestImportSummary = {
   status: ImportStatus;
   uploaded_at?: string;
   completed_at?: string | null;
+  observed_on?: string | null;
+  period_month?: string | null;
+  revision?: number | null;
 };
 
 export type StrategyDistributionItem = {
@@ -389,6 +437,9 @@ export type DashboardApiResponse = {
     status: ImportStatus;
     uploaded_at: string;
     completed_at: string | null;
+    observed_on: string | null;
+    period_month: string | null;
+    revision: number | null;
     total_rows: number;
     created_rows: number;
     matched_rows: number;
@@ -530,6 +581,7 @@ export type ProductEconomicsResponse = {
     evidence_label: 'observed';
     source: 'keepa_import';
     source_at: string;
+    observed_on: string | null;
   } | null;
   currency_code: string;
   profile_source: 'product' | 'marketplace_default' | null;
@@ -648,6 +700,7 @@ export type TestBuyRecommendation = {
     monthly_demand_label: 'estimated' | null;
     monthly_demand_source: 'keepa_monthly_sold' | null;
     market_snapshot_at: string | null;
+    market_observed_on: string | null;
     data_confidence_score_result_id: string | null;
     data_confidence_score: number | null;
     data_confidence_label: 'calculated' | null;

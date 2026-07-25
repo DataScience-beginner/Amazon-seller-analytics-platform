@@ -53,7 +53,10 @@ export function UnitEconomicsPanel({ economics }: { economics: ProductEconomicsR
               })}
             </strong>
             <small>
-              Latest imported selling price · {formatDate(economics.observed_price.source_at)}
+              {economics.observed_price.observed_on
+                ? `Observed on ${formatDate(economics.observed_price.observed_on)}`
+                : 'Observation date unavailable'}{' '}
+              · processed {formatDate(economics.observed_price.source_at)}
             </small>
           </div>
         </div>

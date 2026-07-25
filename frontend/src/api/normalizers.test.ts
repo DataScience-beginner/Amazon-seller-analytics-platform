@@ -15,6 +15,26 @@ describe('API normalizers', () => {
       uploaded_at: '2026-07-19T10:00:00Z',
       confirmed_at: null,
       completed_at: null,
+      dataset: {
+        schema_id: 'keepa.product_finder',
+        schema_version: '1.0.0',
+        schema_match: 'exact',
+        source_column_count: 173,
+        registered_column_count: 173,
+        matched_column_count: 173,
+        new_headers: [],
+        missing_headers: [],
+        source_header_checksum: 'header-checksum',
+        dataset_schema_checksum: 'schema-checksum',
+        observed_on: null,
+        period_month: null,
+        revision: null,
+        date_status: 'pending_confirmation',
+        observation_date_candidates: [{ date: '2026-05-26', source: 'sheet_name' }],
+        observed_on_suggestion: '2026-05-26',
+        suggestion_source: 'sheet_name',
+        observed_on_source: null,
+      },
       workbook: {
         sheet_name: 'Keepa',
         header_row_number: 1,
@@ -38,6 +58,10 @@ describe('API normalizers', () => {
       status: 'pending',
       duplicate: true,
       summary: undefined,
+      dataset: {
+        schema_id: 'keepa.product_finder',
+        observed_on_suggestion: '2026-05-26',
+      },
     });
   });
 
@@ -53,6 +77,7 @@ describe('API normalizers', () => {
       amazon_url: null,
       latest_snapshot_id: 'snapshot-1',
       latest_snapshot_at: '2026-07-19T10:00:00Z',
+      latest_observed_on: '2026-05-26',
       buy_box_price: '12.50',
       currency_code: null,
       offer_count: null,

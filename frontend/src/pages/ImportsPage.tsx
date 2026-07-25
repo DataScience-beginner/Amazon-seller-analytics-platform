@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/Feedback';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
-import { formatDate, formatNumber } from '../utils/format';
+import { formatDate, formatMonth, formatNumber } from '../utils/format';
 
 export function ImportsPage() {
   const { selection } = useWorkspace();
@@ -55,7 +55,7 @@ export function ImportsPage() {
       <PageHeader
         eyebrow="Observed evidence"
         title="Keepa imports"
-        description="Inspect every workbook, confirm dynamic column mappings and create an immutable product snapshot."
+        description="Create one immutable, explicitly dated market dataset for each monthly Keepa workbook."
       />
       <div className="import-layout">
         <section className="panel" aria-labelledby="upload-heading">
@@ -92,9 +92,9 @@ export function ImportsPage() {
           <p className="data-label">Import safety</p>
           <h2 id="safe-import-heading">Nothing changes before confirmation</h2>
           <ul>
-            <li>Known headers are matched through a versioned alias registry.</li>
-            <li>Ambiguous columns wait for your decision.</li>
-            <li>Unknown values are preserved rather than discarded.</li>
+            <li>The workbook date is suggested, but you must confirm it.</li>
+            <li>Registered source fields are preserved without manual mapping.</li>
+            <li>Only ambiguous or genuinely new fields need review.</li>
             <li>Duplicate checksums do not create duplicate snapshots.</li>
           </ul>
         </aside>
@@ -122,6 +122,9 @@ export function ImportsPage() {
                   <th scope="col">File</th>
                   <th scope="col">Status</th>
                   <th scope="col">Rows</th>
+                  <th scope="col">Dataset month</th>
+                  <th scope="col">Observed on</th>
+                  <th scope="col">Revision</th>
                   <th scope="col">Uploaded</th>
                 </tr>
               </thead>
@@ -137,6 +140,17 @@ export function ImportsPage() {
                       <StatusBadge value={item.status} />
                     </td>
                     <td>{formatNumber(item.row_count, 0)}</td>
+                    <td>
+                      {item.period_month
+                        ? formatMonth(item.period_month)
+                        : 'Observation date unavailable'}
+                    </td>
+                    <td>
+                      {item.observed_on
+                        ? formatDate(item.observed_on)
+                        : 'Observation date unavailable'}
+                    </td>
+                    <td>{item.revision ?? 'Not available'}</td>
                     <td>{formatDate(item.uploaded_at ?? item.created_at)}</td>
                   </tr>
                 ))}

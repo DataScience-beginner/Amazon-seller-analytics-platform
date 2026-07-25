@@ -36,6 +36,7 @@ const blockedRecommendation: TestBuyRecommendation = {
     monthly_demand_label: null,
     monthly_demand_source: null,
     market_snapshot_at: '2026-07-18T10:00:00Z',
+    market_observed_on: null,
     data_confidence_score_result_id: null,
     data_confidence_score: null,
     data_confidence_label: null,
@@ -57,6 +58,12 @@ const blockedRecommendation: TestBuyRecommendation = {
       code: 'TEST_BUY_MONTHLY_DEMAND_REQUIRED',
       severity: 'missing',
       message: 'Monthly demand evidence is required before a quantity can be recommended.',
+      evidence_label: 'recommended',
+    },
+    {
+      code: 'MARKET_OBSERVATION_DATE_UNCONFIRMED',
+      severity: 'warning',
+      message: 'The source market evidence has no user-confirmed observation date.',
       evidence_label: 'recommended',
     },
   ],
@@ -89,6 +96,15 @@ describe('TestBuyPlanner evidence semantics', () => {
     expect(screen.queryByText(/Estimated from Keepa monthly sold/)).not.toBeInTheDocument();
     expect(screen.getByText('Missing · no demand estimate is available')).toBeInTheDocument();
     expect(screen.getByText('Missing · no calculated confidence is available')).toBeInTheDocument();
+    expect(screen.getByText('Market observed on').nextElementSibling).toHaveTextContent(
+      'Observation date unavailable',
+    );
+    expect(screen.getByText('Evidence processed').nextElementSibling).toHaveTextContent(
+      'Jul 18, 2026',
+    );
+    expect(
+      screen.getByText('The source market evidence has no user-confirmed observation date.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Recommended · advisory only')).not.toBeInTheDocument();
   });
 

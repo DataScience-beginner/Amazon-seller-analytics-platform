@@ -14,6 +14,7 @@ const economics: ProductEconomicsResponse = {
     evidence_label: 'observed',
     source: 'keepa_import',
     source_at: '2026-07-18T10:00:00Z',
+    observed_on: '2026-05-26',
   },
   currency_code: 'INR',
   profile_source: 'product',
@@ -60,6 +61,37 @@ describe('UnitEconomicsPanel tax evidence', () => {
     expect(netRevenue).not.toHaveTextContent('Calculated');
     expect(outputGst).toHaveTextContent('Unavailable');
     expect(outputGst).not.toHaveTextContent('Calculated');
+    expect(screen.getByText(/Observed on May 26, 2026/)).toHaveTextContent(
+      'processed Jul 18, 2026',
+    );
+  });
+
+  it('does not use the processing timestamp when the market observation date is unconfirmed', () => {
+    render(
+      <UnitEconomicsPanel
+        economics={{
+          ...economics,
+          observed_price: economics.observed_price
+            ? { ...economics.observed_price, observed_on: null }
+            : null,
+          notices: [
+            {
+              code: 'MARKET_OBSERVATION_DATE_UNCONFIRMED',
+              severity: 'warning',
+              message: 'The imported market evidence has no user-confirmed observation date.',
+              evidence_label: 'observed',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Observation date unavailable/)).toHaveTextContent(
+      'processed Jul 18, 2026',
+    );
+    expect(
+      screen.getByText('The imported market evidence has no user-confirmed observation date.'),
+    ).toBeInTheDocument();
   });
 
   it('labels fee source dates explicitly in UTC', () => {

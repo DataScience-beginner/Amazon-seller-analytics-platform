@@ -1,5 +1,6 @@
 import type {
   CostProfile,
+  ConfirmImportRequest,
   CreateCostProfileRequest,
   CreateSupplierOfferRequest,
   CreateTestBuyRequest,
@@ -225,6 +226,7 @@ export function confirmImport(
   importId: string,
   organisationId: string,
   marketplaceId: string,
+  observedOn: ConfirmImportRequest['observed_on'],
 ): Promise<ImportBatch> {
   const scope = queryString({
     organisation_id: organisationId,
@@ -234,7 +236,7 @@ export function confirmImport(
     `/imports/${encodeURIComponent(importId)}/confirm${scope}`,
     {
       method: 'POST',
-      body: {},
+      body: { observed_on: observedOn },
     },
   ).then(normalizeImportDetail);
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatDate,
+  formatMonth,
   formatMoney,
   formatUnitMoney,
   formatUtcDate,
@@ -41,6 +42,16 @@ describe('exact presentation formatting', () => {
 
     expect(formatDate('2026-01-01')).toBe(expected);
     expect(formatDate('2026-01-01')).not.toContain(':');
+  });
+
+  it('formats a dataset month without exposing an artificial day or time', () => {
+    const expected = new Intl.DateTimeFormat(undefined, {
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(2026, 4, 1));
+
+    expect(formatMonth('2026-05-01')).toBe(expected);
+    expect(formatMonth('2026-05')).toBe(expected);
   });
 
   it('derives supplier date defaults from the UTC calendar even across positive-offset hours', () => {

@@ -47,7 +47,7 @@ const configurableColumns = [
   { key: 'confidence', label: 'Data confidence' },
   { key: 'offers', label: 'Offer count' },
   { key: 'price', label: 'Observed price' },
-  { key: 'snapshot', label: 'Latest snapshot' },
+  { key: 'snapshot', label: 'Observed on' },
 ] as const;
 
 type ConfigurableColumn = (typeof configurableColumns)[number]['key'];
@@ -302,7 +302,7 @@ export function ProductsPage() {
               <option value="data_confidence">Data confidence</option>
               <option value="price">Observed price</option>
               <option value="offer_count">Offer count</option>
-              <option value="snapshot_at">Latest snapshot</option>
+              <option value="observed_on">Latest dataset date</option>
               <option value="asin">ASIN</option>
               <option value="title">Title</option>
               <option value="brand">Brand</option>
@@ -385,7 +385,7 @@ export function ProductsPage() {
                   {shownColumns.has('confidence') && <th scope="col">Confidence</th>}
                   {shownColumns.has('offers') && <th scope="col">Offers</th>}
                   {shownColumns.has('price') && <th scope="col">Observed price</th>}
-                  {shownColumns.has('snapshot') && <th scope="col">Latest snapshot</th>}
+                  {shownColumns.has('snapshot') && <th scope="col">Observed on</th>}
                 </tr>
               </thead>
               <tbody>
@@ -424,7 +424,11 @@ export function ProductsPage() {
                       )}
                       {shownColumns.has('price') && <td>{formatMoney(product.buy_box_price)}</td>}
                       {shownColumns.has('snapshot') && (
-                        <td>{formatDate(product.latest_snapshot_at)}</td>
+                        <td>
+                          {product.latest_observed_on
+                            ? formatDate(product.latest_observed_on)
+                            : 'Observation date unavailable'}
+                        </td>
                       )}
                     </tr>
                   );

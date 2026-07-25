@@ -37,6 +37,19 @@ export function formatDate(value?: string | null): string {
   }).format(date);
 }
 
+export function formatMonth(value?: string | null): string {
+  if (!value) return 'Not available';
+  const match = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(value);
+  if (!match) return value;
+  const [, year, month] = match;
+  const monthIndex = Number(month) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(Number(year), monthIndex, 1));
+}
+
 export function formatNumber(value?: number | null, maximumFractionDigits = 1): string {
   if (value === undefined || value === null || !Number.isFinite(value)) return 'Not available';
   return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(value);

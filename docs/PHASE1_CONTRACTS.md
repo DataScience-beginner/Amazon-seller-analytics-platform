@@ -116,6 +116,12 @@ is `relative_research_only` and revenue fields remain null.
 this endpoint together with the bounded product collection endpoint to render a category drill-down;
 the selection never changes or reinterprets the whole-dataset overview.
 
+`POST /api/v1/dashboard/category-cost-estimate` requires scope, exact subcategory, bounded pagination
+and explicit percentage assumptions. `selleros.target-sourcing-cost.v1` uses the 90-day average Buy
+Box price where available, otherwise the current Buy Box with an explicit source label. It returns
+maximum wholesale cost excluding GST, GST-inclusive cash outlay and the individual Estimated
+allowances. This ephemeral research calculation does not persist or replace audited cost profiles.
+
 ## Score semantics
 
 All scores are integer 0–100, where higher is favourable:

@@ -1,10 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Body, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.portfolio.schemas import (
+    CategoryCostEstimateQuery,
+    CategoryCostEstimateResponse,
     DashboardResponse,
     DatasetOverviewQuery,
     DatasetOverviewResponse,
@@ -12,6 +14,7 @@ from app.modules.portfolio.schemas import (
     ProductDetailResponse,
     ProductListQuery,
     ProductListResponse,
+    TargetCostAssumptionsRequest,
 )
 from app.modules.portfolio.service import PortfolioService
 
@@ -40,6 +43,19 @@ def get_dataset_overview(
     session: Annotated[Session, Depends(get_db)],
 ) -> DatasetOverviewResponse | None:
     return PortfolioService(session).dataset_overview(query)
+
+
+@router.post(
+    "/dashboard/category-cost-estimate",
+    response_model=CategoryCostEstimateResponse,
+    summary="Calculate category target sourcing costs from explicit assumptions",
+)
+def estimate_category_costs(
+    query: Annotated[CategoryCostEstimateQuery, Query()],
+    request: Annotated[TargetCostAssumptionsRequest, Body()],
+    session: Annotated[Session, Depends(get_db)],
+) -> CategoryCostEstimateResponse:
+    return PortfolioService(session).category_cost_estimate(query, request)
 
 
 @router.get(

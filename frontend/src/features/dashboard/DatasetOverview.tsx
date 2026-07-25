@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 
-import { fetchDatasetOverview, fetchProducts } from '../../api/client';
+import { fetchCategoryCostEstimate, fetchDatasetOverview, fetchProducts } from '../../api/client';
 import type {
   DatasetDistribution,
   DatasetOverview as DatasetOverviewData,
+  TargetCostAssumptions,
 } from '../../api/contracts';
 import { Link } from '../../app/router';
 import { ErrorState, LoadingState } from '../../components/Feedback';
@@ -56,6 +57,209 @@ function DistributionChart({
   );
 }
 
+const defaultAssumptions: TargetCostAssumptions = {
+  gst_rate_percent: '18',
+  amazon_fee_percent: '15',
+  shipping_percent: '8',
+  advertising_percent: '5',
+  returns_percent: '3',
+  target_profit_percent: '15',
+};
+
+function SubcategoryTables({
+  organisationId,
+  marketplaceId,
+  subcategory,
+}: {
+  organisationId: string;
+  marketplaceId: string;
+  subcategory: string;
+}) {
+  const [view, setView] = useState<'keepa' | 'cost'>('keepa');
+  const [draft, setDraft] = useState(defaultAssumptions);
+  const [assumptions, setAssumptions] = useState(defaultAssumptions);
+  const load = useCallback(
+    (signal: AbortSignal) =>
+      Promise.all([
+        fetchProducts(
+          {
+            organisation_id: organisationId,
+            marketplace_id: marketplaceId,
+            subcategory,
+            screen: 'all',
+            sort_by: 'overall_opportunity',
+            sort_direction: 'desc',
+            page: '1',
+            page_size: '25',
+          },
+          signal,
+        ),
+        fetchCategoryCostEstimate(organisationId, marketplaceId, subcategory, assumptions, signal),
+      ]),
+    [assumptions, marketplaceId, organisationId, subcategory],
+  );
+  const state = useAsync(load);
+
+  function applyAssumptions(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAssumptions(draft);
+  }
+
+  return (
+    <section className="subcategory-tables" aria-labelledby="subcategory-table-heading">
+      <div className="section-heading">
+        <div>
+          <p className="data-label">Selected subcategory</p>
+          <h3 id="subcategory-table-heading">{subcategory}</h3>
+        </div>
+        <div className="decision-tabs" role="tablist" aria-label="Category table view">
+          <button
+            role="tab"
+            aria-selected={view === 'keepa'}
+            type="button"
+            onClick={() => setView('keepa')}
+          >
+            Keepa view
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === 'cost'}
+            type="button"
+            onClick={() => setView('cost')}
+          >
+            Target sourcing cost
+          </button>
+        </div>
+      </div>
+
+      {view === 'cost' && (
+        <form className="assumption-form" onSubmit={applyAssumptions}>
+          {(
+            [
+              ['gst_rate_percent', 'GST'],
+              ['amazon_fee_percent', 'Amazon fee'],
+              ['shipping_percent', 'Shipping / fulfilment'],
+              ['advertising_percent', 'Advertising'],
+              ['returns_percent', 'Returns allowance'],
+              ['target_profit_percent', 'Target profit'],
+            ] as const
+          ).map(([name, label]) => (
+            <label key={name}>
+              <span>{label} %</span>
+              <input
+                type="number"
+                min="0"
+                max={name === 'gst_rate_percent' ? '99.99' : '100'}
+                step="0.1"
+                value={draft[name]}
+                onChange={(event) => setDraft({ ...draft, [name]: event.target.value })}
+              />
+            </label>
+          ))}
+          <button className="button" type="submit">
+            Recalculate
+          </button>
+          <p>
+            Defaults are configurable assumptions. They are not observed Amazon fees or supplier
+            quotations.
+          </p>
+        </form>
+      )}
+
+      {state.status === 'loading' && <LoadingState label={`Loading ${subcategory} products…`} />}
+      {state.status === 'error' && <ErrorState error={state.error} onRetry={state.retry} />}
+      {state.status === 'success' && view === 'keepa' && (
+        <div className="table-scroll" tabIndex={0} aria-label={`${subcategory} Keepa products`}>
+          <table className="product-table category-product-table">
+            <thead>
+              <tr>
+                <th scope="col">Product</th>
+                <th scope="col">Brand</th>
+                <th scope="col">Buy Box</th>
+                <th scope="col">90-day price</th>
+                <th scope="col">Seller offers</th>
+                <th scope="col">Demand</th>
+                <th scope="col">Competition</th>
+                <th scope="col">Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.data[0].items.map((product) => (
+                <tr key={product.id}>
+                  <td>
+                    <Link to={`/products/${encodeURIComponent(product.id)}`}>{product.title}</Link>
+                    <small className="cell-note">{product.asin}</small>
+                  </td>
+                  <td>{product.brand || 'Unknown'}</td>
+                  <td>{formatMoney(product.buy_box_price)}</td>
+                  <td>{formatMoney(product.buy_box_price_90d)}</td>
+                  <td>{formatNumber(product.offer_count, 0)}</td>
+                  <td>{formatNumber(product.demand_score, 0)}</td>
+                  <td>{formatNumber(product.competition_score, 0)}</td>
+                  <td>{formatNumber(product.confidence_score, 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {state.status === 'success' && view === 'cost' && (
+        <>
+          <div className="estimate-boundary">
+            Calculated from the 90-day average Buy Box price where available. Maximum wholesale cost
+            is GST-exclusive; cash outlay includes recoverable input GST.
+          </div>
+          <div className="table-scroll" tabIndex={0} aria-label={`${subcategory} sourcing costs`}>
+            <table className="product-table category-product-table">
+              <thead>
+                <tr>
+                  <th scope="col">Product</th>
+                  <th scope="col">Selling price used</th>
+                  <th scope="col">Max wholesale ex-GST</th>
+                  <th scope="col">Cash outlay incl. GST</th>
+                  <th scope="col">Amazon fee</th>
+                  <th scope="col">Shipping</th>
+                  <th scope="col">Target profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.data[1].items.map((product) => {
+                  const money = (amount: string | null) =>
+                    formatMoney({ amount: amount ?? '', currency_code: product.currency_code });
+                  return (
+                    <tr key={product.product_id}>
+                      <td>
+                        <Link to={`/products/${encodeURIComponent(product.product_id)}`}>
+                          {product.title}
+                        </Link>
+                        <small className="cell-note">{product.asin}</small>
+                      </td>
+                      <td>
+                        {money(product.selling_price)}
+                        <small className="cell-note">
+                          {product.selling_price_source === 'buy_box_90d_average'
+                            ? '90-day average'
+                            : 'Current Buy Box'}
+                        </small>
+                      </td>
+                      <td>{money(product.maximum_wholesale_cost_ex_gst)}</td>
+                      <td>{money(product.wholesale_cash_outlay_including_gst)}</td>
+                      <td>{money(product.amazon_fee)}</td>
+                      <td>{money(product.shipping_allowance)}</td>
+                      <td>{money(product.target_profit)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <small>Formula: {state.data[1].formula_version}</small>
+        </>
+      )}
+    </section>
+  );
+}
+
 function CategoryDeepDive({
   organisationId,
   marketplaceId,
@@ -65,31 +269,17 @@ function CategoryDeepDive({
   marketplaceId: string;
   category: string;
 }) {
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const load = useCallback(
-    (signal: AbortSignal) =>
-      Promise.all([
-        fetchDatasetOverview(organisationId, marketplaceId, category, signal),
-        fetchProducts(
-          {
-            organisation_id: organisationId,
-            marketplace_id: marketplaceId,
-            category,
-            screen: 'all',
-            sort_by: 'overall_opportunity',
-            sort_direction: 'desc',
-            page: '1',
-            page_size: '10',
-          },
-          signal,
-        ),
-      ]),
+    (signal: AbortSignal) => fetchDatasetOverview(organisationId, marketplaceId, category, signal),
     [category, marketplaceId, organisationId],
   );
   const state = useAsync(load);
 
   if (state.status === 'loading') return <LoadingState label={`Analysing ${category}…`} />;
   if (state.status === 'error') return <ErrorState error={state.error} onRetry={state.retry} />;
-  const [overview, products] = state.data;
+  const overview = state.data;
+  const activeSubcategory = selectedSubcategory ?? overview.top_subcategories[0]?.label ?? null;
 
   return (
     <section className="category-deep-dive" aria-labelledby="category-deep-dive-heading">
@@ -111,7 +301,12 @@ function CategoryDeepDive({
       </div>
 
       <div className="dataset-panel-grid">
-        <DistributionChart title={`${category} subcategories`} items={overview.top_subcategories} />
+        <DistributionChart
+          title={`${category} subcategories`}
+          items={overview.top_subcategories}
+          onSelect={setSelectedSubcategory}
+          selected={activeSubcategory}
+        />
         <DistributionChart title={`${category} brands`} items={overview.top_brands} />
         <section className="dataset-chart" aria-label={`${category} evidence coverage`}>
           <h3>Category evidence coverage</h3>
@@ -135,35 +330,13 @@ function CategoryDeepDive({
         </section>
       </div>
 
-      <div className="table-scroll" tabIndex={0} aria-label={`${category} ranked products`}>
-        <table className="product-table category-product-table">
-          <thead>
-            <tr>
-              <th scope="col">Product</th>
-              <th scope="col">Brand</th>
-              <th scope="col">Buy Box</th>
-              <th scope="col">Seller offers</th>
-              <th scope="col">Demand</th>
-              <th scope="col">Confidence</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.items.map((product) => (
-              <tr key={product.id}>
-                <td>
-                  <Link to={`/products/${encodeURIComponent(product.id)}`}>{product.title}</Link>
-                  <small className="cell-note">{product.asin}</small>
-                </td>
-                <td>{product.brand || 'Unknown'}</td>
-                <td>{formatMoney(product.buy_box_price)}</td>
-                <td>{formatNumber(product.offer_count, 0)}</td>
-                <td>{formatNumber(product.demand_score, 0)}</td>
-                <td>{formatNumber(product.confidence_score, 0)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {activeSubcategory && (
+        <SubcategoryTables
+          organisationId={organisationId}
+          marketplaceId={marketplaceId}
+          subcategory={activeSubcategory}
+        />
+      )}
     </section>
   );
 }

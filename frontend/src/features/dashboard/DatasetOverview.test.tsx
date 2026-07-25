@@ -104,6 +104,23 @@ describe('DatasetOverview', () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes('/dashboard/dataset-overview')) return Response.json(categoryOverview);
+        if (url.includes('/dashboard/category-cost-estimate')) {
+          return Response.json({
+            subcategory: 'Cars & Race Cars',
+            formula_version: 'selleros.target-sourcing-cost.v1',
+            configuration_checksum: 'checksum',
+            assumptions: {},
+            items: [],
+            pagination: {
+              page: 1,
+              page_size: 25,
+              total_items: 0,
+              total_pages: 0,
+              has_previous: false,
+              has_next: false,
+            },
+          });
+        }
         if (url.includes('/products?')) {
           return Response.json({
             scope: { organisation_id: 'org-1', marketplace_id: 'market-1' },
@@ -150,10 +167,18 @@ describe('DatasetOverview', () => {
     expect(screen.getByLabelText('Toys & Games subcategories')).toHaveTextContent(
       'Cars & Race Cars',
     );
-    expect(screen.getByLabelText('Toys & Games ranked products')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Cars & Race Cars Keepa products')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open full category research' })).toHaveAttribute(
       'href',
       expect.stringContaining('category=Toys%20%26%20Games'),
     );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Target sourcing cost' }));
+
+    expect(screen.getByLabelText('GST %')).toHaveValue(18);
+    expect(screen.getByLabelText('Amazon fee %')).toHaveValue(15);
+    expect(screen.getByLabelText('Target profit %')).toHaveValue(15);
+    expect(screen.getByLabelText('Cars & Race Cars sourcing costs')).toBeInTheDocument();
+    expect(screen.getByText(/Defaults are configurable assumptions/)).toBeInTheDocument();
   });
 });

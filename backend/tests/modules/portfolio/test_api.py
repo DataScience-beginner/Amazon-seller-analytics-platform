@@ -336,6 +336,22 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
                 "category": "Toys & Games",
             },
         )
+        estimate_response = client.post(
+            "/api/v1/dashboard/category-cost-estimate",
+            params={
+                "organisation_id": organisation.id,
+                "marketplace_id": marketplace.id,
+                "subcategory": "Cars & Race Cars",
+            },
+            json={
+                "gst_rate_percent": "18",
+                "amazon_fee_percent": "15",
+                "shipping_percent": "8",
+                "advertising_percent": "5",
+                "returns_percent": "3",
+                "target_profit_percent": "15",
+            },
+        )
 
     assert response.status_code == 200
     overview = response.json()["dataset_overview"]
@@ -353,6 +369,13 @@ def test_dashboard_summarises_dataset_evidence_without_inventing_revenue(
         "Cars & Race Cars",
         "Dolls",
     }
+    assert estimate_response.status_code == 200
+    estimate = estimate_response.json()
+    assert estimate["formula_version"] == "selleros.target-sourcing-cost.v1"
+    assert estimate["pagination"]["total_items"] == 1
+    assert estimate["items"][0]["asin"] == "B000OVER01"
+    assert estimate["items"][0]["selling_price_source"] == "buy_box_90d_average"
+    assert estimate["items"][0]["maximum_wholesale_cost_ex_gst"] == "205.17"
 
 
 def test_legacy_undated_evidence_is_browsable_but_excluded_from_current_decisions(

@@ -25,6 +25,8 @@ from app.modules.portfolio.repository import (
 )
 from app.modules.portfolio.schemas import (
     AppliedProductQueryResponse,
+    CategoryCostEstimateQuery,
+    CategoryCostEstimateResponse,
     DashboardKpiResponse,
     DashboardResponse,
     DashboardRiskResponse,
@@ -54,6 +56,15 @@ from app.modules.portfolio.schemas import (
     SnapshotResponse,
     StrategyDistributionResponse,
     StrategyHistoryResponse,
+    TargetCostAssumptionsRequest,
+    TargetCostProductResponse,
+)
+from app.modules.profitability.reverse import (
+    FORMULA_VERSION as TARGET_COST_FORMULA_VERSION,
+)
+from app.modules.profitability.reverse import (
+    TargetCostAssumptions,
+    calculate_target_sourcing_cost,
 )
 from app.modules.research import (
     ResearchAssessment,
@@ -139,6 +150,7 @@ class PortfolioService:
             generic_brand_markers=self._research_policy.generic_brand_markers,
             strategy=query.strategy,
             category=query.category,
+            subcategory=query.subcategory,
             min_score=query.min_score,
             max_score=query.max_score,
             min_offer_count=query.min_offer_count,
@@ -184,6 +196,7 @@ class PortfolioService:
                 brand_classification=query.brand_classification,
                 strategy=query.strategy,
                 category=query.category,
+                subcategory=query.subcategory,
                 min_score=query.min_score,
                 max_score=query.max_score,
                 min_offer_count=query.min_offer_count,
@@ -379,6 +392,92 @@ class PortfolioService:
         self._repository.ensure_scope(scope)
         return _dataset_overview(
             self._repository.dataset_evidence_rows(scope, category=query.category)
+        )
+
+    def category_cost_estimate(
+        self,
+        query: CategoryCostEstimateQuery,
+        request: TargetCostAssumptionsRequest,
+    ) -> CategoryCostEstimateResponse:
+        scope = _scope(query)
+        self._repository.ensure_scope(scope)
+        assumptions = TargetCostAssumptions(
+            gst_rate_percent=request.gst_rate_percent,
+            amazon_fee_percent=request.amazon_fee_percent,
+            shipping_percent=request.shipping_percent,
+            advertising_percent=request.advertising_percent,
+            returns_percent=request.returns_percent,
+            target_profit_percent=request.target_profit_percent,
+        )
+        page = self._repository.list_products(
+            ProductQuerySpec(
+                scope=scope,
+                subcategory=query.subcategory,
+                sort_by=ProductSortField.overall_opportunity,
+                page=query.page,
+                page_size=query.page_size,
+                require_confirmed_observation=True,
+            )
+        )
+        total_pages = (
+            (page.total_items + query.page_size - 1) // query.page_size if page.total_items else 0
+        )
+        items: list[TargetCostProductResponse] = []
+        for record in page.items:
+            snapshot = record.snapshot
+            price = (
+                snapshot.buy_box_price_90d
+                if snapshot is not None and snapshot.buy_box_price_90d is not None
+                else snapshot.buy_box_price
+                if snapshot is not None
+                else None
+            )
+            source: Literal["buy_box_90d_average", "current_buy_box", "unavailable"] = "unavailable"
+            if snapshot is not None and snapshot.buy_box_price_90d is not None:
+                source = "buy_box_90d_average"
+            elif price is not None:
+                source = "current_buy_box"
+            result = (
+                calculate_target_sourcing_cost(price, assumptions) if price is not None else None
+            )
+            items.append(
+                TargetCostProductResponse(
+                    product_id=record.product.id,
+                    asin=record.product.asin,
+                    title=record.product.title,
+                    brand=record.product.brand,
+                    currency_code=snapshot.currency_code if snapshot is not None else None,
+                    selling_price=price,
+                    selling_price_source=source,
+                    maximum_wholesale_cost_ex_gst=(
+                        result.maximum_wholesale_cost_ex_gst if result else None
+                    ),
+                    wholesale_cash_outlay_including_gst=(
+                        result.wholesale_cash_outlay_including_gst if result else None
+                    ),
+                    target_profit=result.target_profit if result else None,
+                    amazon_fee=result.amazon_fee if result else None,
+                    shipping_allowance=result.shipping_allowance if result else None,
+                    advertising_allowance=result.advertising_allowance if result else None,
+                    returns_allowance=result.returns_allowance if result else None,
+                    feasible=result.feasible if result else False,
+                )
+            )
+        return CategoryCostEstimateResponse(
+            scope=_scope_response(scope),
+            subcategory=query.subcategory,
+            formula_version=TARGET_COST_FORMULA_VERSION,
+            configuration_checksum=assumptions.configuration_checksum,
+            assumptions=request,
+            items=items,
+            pagination=PaginationResponse(
+                page=query.page,
+                page_size=query.page_size,
+                total_items=page.total_items,
+                total_pages=total_pages,
+                has_previous=query.page > 1 and page.total_items > 0,
+                has_next=query.page < total_pages,
+            ),
         )
 
 

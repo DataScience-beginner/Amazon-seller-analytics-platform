@@ -6,6 +6,7 @@ import type {
   CreateTestBuyRequest,
   DashboardResponse,
   DashboardApiResponse,
+  CategoryCostEstimateResponse,
   ImportBatch,
   ImportDetailApiResponse,
   ImportListApiResponse,
@@ -16,6 +17,7 @@ import type {
   ProductListApiResponse,
   ProductListResponse,
   ProductQuery,
+  TargetCostAssumptions,
   ProductEconomicsResponse,
   SupplierOffer,
   SupplierOfferListResponse,
@@ -266,6 +268,29 @@ export function fetchDatasetOverview(
       category,
     })}`,
     { signal },
+  );
+}
+
+export function fetchCategoryCostEstimate(
+  organisationId: string,
+  marketplaceId: string,
+  subcategory: string,
+  assumptions: TargetCostAssumptions,
+  signal?: AbortSignal,
+) {
+  return request<CategoryCostEstimateResponse>(
+    `/dashboard/category-cost-estimate${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+      subcategory,
+      page: '1',
+      page_size: '25',
+    })}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(assumptions),
+      signal,
+    },
   );
 }
 

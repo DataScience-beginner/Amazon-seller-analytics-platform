@@ -2253,6 +2253,75 @@ tbody tr:hover {
   min-width: 22rem;
 }
 
+.subcategory-tables {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.decision-tabs {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  display: flex;
+  padding: 3px;
+}
+
+.decision-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 750;
+  padding: 9px 13px;
+}
+
+.decision-tabs button[aria-selected='true'] {
+  background: var(--brand);
+  color: white;
+}
+
+.assumption-form {
+  align-items: end;
+  background: #fff8e8;
+  border: 1px solid #e7c98a;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(7rem, 1fr)) auto;
+  padding: 14px;
+}
+
+.assumption-form label {
+  display: grid;
+  font-size: 0.75rem;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.assumption-form input {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.assumption-form p {
+  color: var(--muted);
+  font-size: 0.75rem;
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.estimate-boundary {
+  background: #fff8e8;
+  border-left: 4px solid var(--warning);
+  padding: 10px 12px;
+}
+
 @media (max-width: 1100px) {
   .dataset-stat-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2260,6 +2329,10 @@ tbody tr:hover {
 
   .dataset-panel-grid {
     grid-template-columns: 1fr;
+  }
+
+  .assumption-form {
+    grid-template-columns: repeat(3, minmax(7rem, 1fr));
   }
 }
 
@@ -2275,5 +2348,9 @@ tbody tr:hover {
 
   .dataset-stat--blocked {
     grid-column: 1 / -1;
+  }
+
+  .assumption-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -44,3 +44,17 @@ closes the prior effective window and appends an audit event; it never changes i
 Currency must match the marketplace until a future version introduces explicit FX evidence. Profile
 and audit collections are bounded, and a database constraint ties every profile scope key to either
 its product identifier or the marketplace-default sentinel.
+
+## Target sourcing cost v1
+
+`selleros.target-sourcing-cost.v1` is a separate reverse-estimation kernel for early category
+research. It does not create or replace a seller cost profile. From an explicit GST-inclusive
+selling price it separates output GST, then deducts configurable gross-price allowances for Amazon
+fees, shipping/fulfilment, advertising and returns plus a target-profit percentage of net revenue.
+The remainder is the maximum wholesale purchase cost excluding recoverable input GST. A separate
+cash-outlay value adds input GST so working-capital requirements are not confused with economic cost.
+
+The dashboard defaults—18% GST, 15% Amazon fee, 8% shipping/fulfilment, 5% advertising, 3% returns
+and 15% target profit—are Estimated assumptions, never observed fee evidence. Users may change them
+for an ephemeral comparison. Persisted product economics continue to require the audited cost-profile
+workflow and the full unit-economics v2 kernel.

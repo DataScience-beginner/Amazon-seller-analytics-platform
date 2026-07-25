@@ -71,6 +71,7 @@ class ProductListQuery(PortfolioScopeQuery):
     brand_classification: BrandClassification | None = None
     strategy: Strategy | None = None
     category: CategoryText | None = None
+    subcategory: CategoryText | None = None
     min_score: ScoreValue | None = None
     max_score: ScoreValue | None = None
     min_offer_count: NonNegativeInteger | None = None
@@ -235,6 +236,7 @@ class AppliedProductQueryResponse(BaseModel):
     brand_classification: BrandClassification | None
     strategy: Strategy | None
     category: str | None
+    subcategory: str | None
     min_score: int | None
     max_score: int | None
     min_offer_count: int | None
@@ -390,6 +392,51 @@ class DashboardResponse(BaseModel):
     top_risks: list[DashboardRiskResponse]
     dataset_overview: DatasetOverviewResponse | None
     empty_state: EmptyDashboardResponse | None
+
+
+class TargetCostAssumptionsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    gst_rate_percent: Annotated[Decimal, Field(ge=0, lt=100)] = Decimal("18")
+    amazon_fee_percent: Annotated[Decimal, Field(ge=0, le=100)] = Decimal("15")
+    shipping_percent: Annotated[Decimal, Field(ge=0, le=100)] = Decimal("8")
+    advertising_percent: Annotated[Decimal, Field(ge=0, le=100)] = Decimal("5")
+    returns_percent: Annotated[Decimal, Field(ge=0, le=100)] = Decimal("3")
+    target_profit_percent: Annotated[Decimal, Field(ge=0, le=100)] = Decimal("15")
+
+
+class CategoryCostEstimateQuery(PortfolioScopeQuery):
+    subcategory: CategoryText
+    page: Annotated[int, Field(ge=1)] = 1
+    page_size: Annotated[int, Field(ge=1, le=100)] = 25
+
+
+class TargetCostProductResponse(BaseModel):
+    product_id: str
+    asin: str
+    title: str | None
+    brand: str | None
+    currency_code: str | None
+    selling_price: Decimal | None
+    selling_price_source: Literal["buy_box_90d_average", "current_buy_box", "unavailable"]
+    maximum_wholesale_cost_ex_gst: Decimal | None
+    wholesale_cash_outlay_including_gst: Decimal | None
+    target_profit: Decimal | None
+    amazon_fee: Decimal | None
+    shipping_allowance: Decimal | None
+    advertising_allowance: Decimal | None
+    returns_allowance: Decimal | None
+    feasible: bool
+
+
+class CategoryCostEstimateResponse(BaseModel):
+    scope: ScopeResponse
+    subcategory: str
+    formula_version: str
+    configuration_checksum: str
+    assumptions: TargetCostAssumptionsRequest
+    items: list[TargetCostProductResponse]
+    pagination: PaginationResponse
 
 
 class ProductPath(BaseModel):

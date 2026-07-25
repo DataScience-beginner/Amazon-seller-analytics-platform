@@ -245,6 +245,23 @@ evidence can responsibly support.
 - Conclusions clearly distinguish relative product research from revenue-ready evidence.
 - Single-category and material brand-concentration datasets receive explicit notices.
 
+#### SOS-306 — Compare category evidence with target sourcing cost
+
+**As a seller,** I want Keepa evidence and a reverse cost estimate in separate table views so I can
+decide the maximum wholesale price worth investigating.
+
+**Acceptance criteria**
+
+- Selecting a subcategory opens a bounded, paginated Keepa evidence table.
+- A separate tab calculates target wholesale cost from the 90-day average Buy Box price, falling
+  back explicitly to the current Buy Box.
+- GST, Amazon fee, shipping/fulfilment, advertising, returns and target-profit assumptions are
+  configurable Decimal percentages with labelled defaults.
+- Maximum wholesale cost is GST-exclusive and purchasing cash outlay including recoverable input GST
+  is shown separately.
+- The versioned calculation runs in a pure backend kernel and never creates a seller cost profile,
+  supplier quotation or purchasing instruction.
+
 ## Phase 2 — Unit economics and sourcing
 
 ### Epic E4: Profitability engine

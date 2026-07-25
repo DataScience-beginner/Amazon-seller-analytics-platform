@@ -39,6 +39,7 @@ class ProductQuerySpec:
     generic_brand_markers: frozenset[str] = frozenset()
     strategy: Strategy | None = None
     category: str | None = None
+    subcategory: str | None = None
     min_score: int | None = None
     max_score: int | None = None
     min_offer_count: int | None = None
@@ -636,6 +637,10 @@ class PortfolioRepository:
             statement = statement.where(bundle.recommendation.strategy == spec.strategy.value)
         if spec.category is not None:
             statement = statement.where(func.lower(Product.category) == spec.category.casefold())
+        if spec.subcategory is not None:
+            statement = statement.where(
+                func.lower(Product.subcategory) == spec.subcategory.casefold()
+            )
         if spec.min_score is not None:
             statement = statement.where(bundle.overall_score.score_value >= spec.min_score)
         if spec.max_score is not None:

@@ -561,6 +561,7 @@ export type ProductQuery = {
   brand_classification?: string;
   strategy?: string;
   category?: string;
+  subcategory?: string;
   min_score?: string;
   max_score?: string;
   min_offer_count?: string;
@@ -573,6 +574,47 @@ export type ProductQuery = {
   sort_direction?: string;
   page?: string;
   page_size?: string;
+};
+
+export type TargetCostAssumptions = {
+  gst_rate_percent: string;
+  amazon_fee_percent: string;
+  shipping_percent: string;
+  advertising_percent: string;
+  returns_percent: string;
+  target_profit_percent: string;
+};
+
+export type CategoryCostEstimateResponse = {
+  subcategory: string;
+  formula_version: string;
+  configuration_checksum: string;
+  assumptions: TargetCostAssumptions;
+  items: Array<{
+    product_id: string;
+    asin: string;
+    title: string | null;
+    brand: string | null;
+    currency_code: string | null;
+    selling_price: string | null;
+    selling_price_source: 'buy_box_90d_average' | 'current_buy_box' | 'unavailable';
+    maximum_wholesale_cost_ex_gst: string | null;
+    wholesale_cash_outlay_including_gst: string | null;
+    target_profit: string | null;
+    amazon_fee: string | null;
+    shipping_allowance: string | null;
+    advertising_allowance: string | null;
+    returns_allowance: string | null;
+    feasible: boolean;
+  }>;
+  pagination: {
+    page: number;
+    page_size: number;
+    total_items: number;
+    total_pages: number;
+    has_previous: boolean;
+    has_next: boolean;
+  };
 };
 
 export type EvidenceLabel =

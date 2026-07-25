@@ -288,7 +288,7 @@ export function fetchCategoryCostEstimate(
     })}`,
     {
       method: 'POST',
-      body: JSON.stringify(assumptions),
+      body: assumptions,
       signal,
     },
   );

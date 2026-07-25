@@ -8,13 +8,14 @@ import { ErrorState, LoadingState } from '../components/Feedback';
 import { PageHeader } from '../components/PageHeader';
 import { ScoreDisplay } from '../components/ScoreDisplay';
 import { StatusBadge } from '../components/StatusBadge';
+import { BrandLabel, ResearchStatusLabel } from '../features/research/ResearchCharts';
 import {
   allProductScores,
   productRecommendation,
   productStrategy,
 } from '../features/products/productModel';
 import { useAsync } from '../hooks/useAsync';
-import { formatDate, humanize } from '../utils/format';
+import { formatDate, formatMoney, formatNumber, humanize } from '../utils/format';
 
 function readableMetric(value: unknown): string {
   if (value === null || value === undefined || value === '') return 'Not available';
@@ -43,6 +44,7 @@ export function ProductDetailPage({ productId }: { productId: string }) {
   if (state.status === 'error') return <ErrorState error={state.error} onRetry={state.retry} />;
 
   const product = state.data;
+  const research = product.research;
   const recommendation = productRecommendation(product);
   const strategy = productStrategy(product);
   const scores = allProductScores(product);
@@ -84,10 +86,117 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         }
       />
 
+      {research && (
+        <section className="research-decision panel" aria-labelledby="research-decision-heading">
+          <div className="research-decision__heading">
+            <div>
+              <p className="data-label">Recommended · product research only</p>
+              <h2 id="research-decision-heading">{humanize(research.status)}</h2>
+              <p>
+                This status prioritises market investigation. It is not a profitability, brand
+                authorisation or purchase approval.
+              </p>
+            </div>
+            <div className="research-decision__labels">
+              <ResearchStatusLabel status={research.status} />
+              <BrandLabel classification={research.brand_classification} />
+            </div>
+          </div>
+          <div className="research-decision__evidence">
+            <div>
+              <h3>Why investigate</h3>
+              <ul>
+                {research.positive_signals.map((signal) => (
+                  <li key={signal}>{signal}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>Checks before sourcing</h3>
+              <ul>
+                {[...research.risk_signals, ...research.missing_evidence].map((signal) => (
+                  <li key={signal}>{signal}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <small>
+            Policy {research.policy_version} · Calculated from the confirmed monthly snapshot
+          </small>
+        </section>
+      )}
+
+      <section className="panel critical-metrics" aria-labelledby="critical-metrics-heading">
+        <div className="section-heading">
+          <div>
+            <p className="data-label">Critical market evidence</p>
+            <h2 id="critical-metrics-heading">Decision snapshot</h2>
+          </div>
+          <span>Observed {formatDate(product.latest_observed_on)}</span>
+        </div>
+        <dl className="critical-metric-grid">
+          <div>
+            <dt>Est. bought past month</dt>
+            <dd>{formatNumber(product.estimated_monthly_bought, 0)}</dd>
+            <small>Estimated by Keepa, not observed orders</small>
+          </div>
+          <div>
+            <dt>Current seller offers</dt>
+            <dd>{formatNumber(product.offer_count, 0)}</dd>
+            <small>Sellers/offers on this ASIN</small>
+          </div>
+          <div>
+            <dt>Buy Box price</dt>
+            <dd>{formatMoney(product.buy_box_price)}</dd>
+            <small>90-day average {formatMoney(product.buy_box_price_90d)}</small>
+          </div>
+          <div>
+            <dt>Sales rank</dt>
+            <dd>{formatNumber(product.sales_rank, 0)}</dd>
+            <small>90-day average {formatNumber(product.sales_rank_90d, 0)}</small>
+          </div>
+          <div>
+            <dt>Buy Box winners</dt>
+            <dd>{formatNumber(product.buy_box_winner_count_90d, 0)}</dd>
+            <small>Distinct winners over 90 days</small>
+          </div>
+          <div>
+            <dt>Buy Box out of stock</dt>
+            <dd>
+              {product.buy_box_oos_percentage_90d === null ||
+              product.buy_box_oos_percentage_90d === undefined
+                ? 'Not available'
+                : `${readableMetric(product.buy_box_oos_percentage_90d)}%`}
+            </dd>
+            <small>Observed 90-day share</small>
+          </div>
+          <div>
+            <dt>Demand score</dt>
+            <dd>{formatNumber(product.demand_score, 0)} / 100</dd>
+            <small>Calculated market activity</small>
+          </div>
+          <div>
+            <dt>Competition score</dt>
+            <dd>{formatNumber(product.competition_score, 0)} / 100</dd>
+            <small>Higher means more approachable</small>
+          </div>
+          <div>
+            <dt>Price stability</dt>
+            <dd>{formatNumber(product.price_stability_score, 0)} / 100</dd>
+            <small>Calculated from price and OOS evidence</small>
+          </div>
+          <div>
+            <dt>Data confidence</dt>
+            <dd>{formatNumber(product.confidence_score, 0)} / 100</dd>
+            <small>Missing evidence reduces this score</small>
+          </div>
+        </dl>
+      </section>
+
       {showRecommendation && recommendation && strategy ? (
         <section className="recommendation-hero" aria-labelledby="recommendation-heading">
           <div>
-            <p className="data-label">Recommended · advisory only</p>
+            <p className="data-label">Calculated market strategy · advisory only</p>
             <h2 id="recommendation-heading">{humanize(strategy)}</h2>
             <StatusBadge value={strategy} />
           </div>
@@ -215,19 +324,34 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         <div className="section-heading">
           <div>
             <p className="data-label">Observed</p>
-            <h2 id="metrics-heading">Latest market metrics</h2>
+            <h2 id="metrics-heading">Additional market metrics</h2>
           </div>
         </div>
         {Object.keys(metrics).length === 0 ? (
           <p className="muted">No market metrics are available.</p>
         ) : (
           <dl className="metric-grid">
-            {Object.entries(metrics).map(([name, value]) => (
-              <div key={name}>
-                <dt>{humanize(name)}</dt>
-                <dd>{readableMetric(value)}</dd>
-              </div>
-            ))}
+            {Object.entries(metrics)
+              .filter(
+                ([name]) =>
+                  ![
+                    'estimated_monthly_bought',
+                    'new_offer_count',
+                    'total_offer_count',
+                    'buy_box_price',
+                    'buy_box_price_90d',
+                    'sales_rank',
+                    'sales_rank_90d',
+                    'buy_box_winner_count_90d',
+                    'buy_box_oos_percentage_90d',
+                  ].includes(name),
+              )
+              .map(([name, value]) => (
+                <div key={name}>
+                  <dt>{humanize(name)}</dt>
+                  <dd>{readableMetric(value)}</dd>
+                </div>
+              ))}
           </dl>
         )}
       </section>

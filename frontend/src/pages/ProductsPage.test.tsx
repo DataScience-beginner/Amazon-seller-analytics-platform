@@ -34,14 +34,33 @@ function response() {
         latest_snapshot_id: 'snapshot-1',
         latest_snapshot_at: '2026-07-01T10:00:00Z',
         buy_box_price: '1299.00',
+        buy_box_price_90d: '1250.00',
         currency_code: 'INR',
         offer_count: 4,
+        sales_rank: 2400,
+        sales_rank_90d: 2600,
+        estimated_monthly_bought: 500,
+        buy_box_winner_count_90d: 2,
+        buy_box_oos_percentage_90d: '4.5',
+        demand_score: 88,
+        competition_score: 84,
+        price_stability_score: 86,
         overall_opportunity_score: 82,
         data_confidence_score: 91,
         strategy: 'growth',
         recommendation_confidence: 88,
         score_formula_version: '1.0.0',
         strategy_rules_version: '1.0.0',
+        research: {
+          status: 'priority_research',
+          brand_classification: 'declared_brand',
+          policy_version: 'product-research-v1.0.0',
+          configuration_checksum: 'abc123',
+          reason_codes: ['priority_thresholds_met'],
+          positive_signals: ['Strong demand evidence'],
+          risk_signals: ['Brand authorisation is not verified'],
+          missing_evidence: ['Supplier cost'],
+        },
         data_quality_codes: [],
       },
     ],
@@ -54,12 +73,30 @@ function response() {
       has_next: false,
     },
     query: {},
+    research_policy_version: 'product-research-v1.0.0',
+    research_configuration_checksum: 'abc123',
+    screens: [
+      {
+        id: 'priority_research',
+        label: 'Priority research',
+        description: 'Strongest candidates for further checks.',
+      },
+      {
+        id: 'promising',
+        label: 'Promising',
+        description: 'Broader candidates for investigation.',
+      },
+    ],
   });
 }
 
 describe('ProductsPage', () => {
   beforeEach(() => {
-    window.history.replaceState({}, '', '/products?strategy=growth&page=2&columns=overall%2Cprice');
+    window.history.replaceState(
+      {},
+      '',
+      '/products?screen=promising&page=2&brand_classification=declared_brand',
+    );
     vi.stubGlobal('scrollTo', vi.fn());
   });
 
@@ -85,23 +122,28 @@ describe('ProductsPage', () => {
     );
 
     expect(await screen.findByText('Travel Mug')).toBeInTheDocument();
-    expect(screen.getByLabelText('Strategy')).toHaveValue('growth');
-    expect(fetchMock.mock.calls[0]?.[0]).toContain('strategy=growth');
+    expect(screen.getByLabelText('Brand evidence')).toHaveValue('declared_brand');
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('screen=promising');
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('brand_classification=declared_brand');
     expect(fetchMock.mock.calls[0]?.[0]).toContain('page=2');
-    expect(fetchMock.mock.calls[0]?.[0]).not.toContain('columns=');
-    expect(screen.getByRole('columnheader', { name: 'Overall' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Observed price' })).toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: 'Recommendation' })).not.toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Overall score' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Recommendation' })).not.toBeChecked();
+    expect(screen.getByRole('columnheader', { name: 'Research action' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Est. bought/month' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Seller offers' })).toBeInTheDocument();
+    expect(screen.getAllByText('Priority Research')).not.toHaveLength(0);
+    expect(screen.getAllByText('Declared brand')).not.toHaveLength(0);
+    expect(screen.getByText(/shortlist for research only/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Search products'), { target: { value: 'mug' } });
-    fireEvent.submit(screen.getByLabelText('Search products').closest('form') as HTMLFormElement);
+    fireEvent.change(screen.getByLabelText('Search ASIN, title or brand'), {
+      target: { value: 'mug' },
+    });
+    fireEvent.submit(
+      screen.getByLabelText('Search ASIN, title or brand').closest('form') as HTMLFormElement,
+    );
 
     await waitFor(() => expect(window.location.search).toContain('search=mug'));
     expect(window.location.search).toContain('page=1');
-    expect(window.location.search).toContain('strategy=growth');
-    expect(window.location.search).toContain('columns=overall%2Cprice');
+    expect(window.location.search).toContain('screen=promising');
+    expect(window.location.search).toContain('brand_classification=declared_brand');
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 });

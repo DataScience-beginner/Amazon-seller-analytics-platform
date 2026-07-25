@@ -122,6 +122,21 @@ function snapshot(response: ProductSnapshotResponse): Snapshot {
 
 export function normalizeProductSummary(item: ProductListItemResponse): ProductSummary {
   const scores: Score[] = [];
+  for (const [name, value] of [
+    ['demand', item.demand_score],
+    ['competition', item.competition_score],
+    ['price_stability', item.price_stability_score],
+  ] as const) {
+    if (typeof value === 'number') {
+      scores.push(
+        score({
+          name,
+          value,
+          formula_version: item.score_formula_version,
+        }),
+      );
+    }
+  }
   if (item.overall_opportunity_score !== null) {
     scores.push(
       score({
@@ -159,10 +174,25 @@ export function normalizeProductSummary(item: ProductListItemResponse): ProductS
         }
       : undefined,
     scores,
+    demand_score: item.demand_score ?? undefined,
+    competition_score: item.competition_score ?? undefined,
+    price_stability_score: item.price_stability_score ?? undefined,
+    overall_score: item.overall_opportunity_score ?? undefined,
+    confidence_score: item.data_confidence_score ?? undefined,
     offer_count: item.offer_count,
+    sales_rank: item.sales_rank,
+    sales_rank_90d: item.sales_rank_90d,
+    estimated_monthly_bought: item.estimated_monthly_bought,
+    buy_box_winner_count_90d: item.buy_box_winner_count_90d,
+    buy_box_oos_percentage_90d: item.buy_box_oos_percentage_90d,
+    research: item.research,
     buy_box_price:
       item.buy_box_price !== null
         ? { amount: item.buy_box_price, currency_code: item.currency_code }
+        : null,
+    buy_box_price_90d:
+      item.buy_box_price_90d !== null && item.buy_box_price_90d !== undefined
+        ? { amount: item.buy_box_price_90d, currency_code: item.currency_code }
         : null,
     latest_snapshot_at: item.latest_snapshot_at,
     latest_observed_on: item.latest_observed_on,
@@ -177,6 +207,9 @@ export function normalizeProductList(response: ProductListApiResponse): ProductL
     page: response.pagination.page,
     page_size: response.pagination.page_size,
     total_pages: response.pagination.total_pages,
+    research_policy_version: response.research_policy_version,
+    research_configuration_checksum: response.research_configuration_checksum,
+    screens: response.screens,
   };
 }
 
@@ -230,11 +263,13 @@ export function normalizeDashboard(response: DashboardApiResponse): DashboardRes
 
 export function normalizeProductDetail(response: ProductDetailApiResponse): ProductDetail {
   const latest = response.latest_snapshot;
+  const latestScores = latest?.scores.map(score) ?? [];
+  const scoreValue = (name: string) => latestScores.find((item) => item.name === name)?.value;
   const currentRecommendation = recommendation(latest?.recommendation ?? null);
   if (currentRecommendation) {
     currentRecommendation.missing_data = response.notices.map((notice) => notice.message);
   }
-  const offerCount = latest?.metrics.total_offer_count ?? latest?.metrics.new_offer_count;
+  const offerCount = latest?.metrics.new_offer_count ?? latest?.metrics.total_offer_count;
   const currencyCode = latest?.metrics.currency_code;
   const price = latest?.metrics.buy_box_price;
 
@@ -246,16 +281,49 @@ export function normalizeProductDetail(response: ProductDetailApiResponse): Prod
     category: response.product.subcategory ?? response.product.category,
     image_url: response.product.image_url,
     amazon_url: response.product.amazon_url,
+    research: response.research,
     latest_snapshot_at: latest?.snapshot_at ?? null,
     latest_observed_on: latest?.observed_on ?? null,
     strategy: currentRecommendation?.strategy,
     recommendation: currentRecommendation,
-    scores: latest?.scores.map(score) ?? [],
+    scores: latestScores,
+    demand_score: scoreValue('demand'),
+    competition_score: scoreValue('competition'),
+    price_stability_score: scoreValue('price_stability'),
+    confidence_score: scoreValue('data_confidence'),
+    overall_score: scoreValue('overall_opportunity'),
     offer_count: typeof offerCount === 'number' ? offerCount : Number(offerCount) || null,
+    sales_rank: typeof latest?.metrics.sales_rank === 'number' ? latest.metrics.sales_rank : null,
+    sales_rank_90d:
+      typeof latest?.metrics.sales_rank_90d === 'number' ? latest.metrics.sales_rank_90d : null,
+    estimated_monthly_bought:
+      typeof latest?.metrics.estimated_monthly_bought === 'number'
+        ? latest.metrics.estimated_monthly_bought
+        : null,
+    buy_box_winner_count_90d:
+      typeof latest?.metrics.buy_box_winner_count_90d === 'number'
+        ? latest.metrics.buy_box_winner_count_90d
+        : null,
+    buy_box_oos_percentage_90d:
+      typeof latest?.metrics.buy_box_oos_percentage_90d === 'string' ||
+      typeof latest?.metrics.buy_box_oos_percentage_90d === 'number'
+        ? latest.metrics.buy_box_oos_percentage_90d
+        : null,
     buy_box_price:
       price !== undefined && price !== null
         ? {
             amount: typeof price === 'string' || typeof price === 'number' ? price : String(price),
+            currency_code: typeof currencyCode === 'string' ? currencyCode : null,
+          }
+        : null,
+    buy_box_price_90d:
+      latest?.metrics.buy_box_price_90d !== undefined && latest.metrics.buy_box_price_90d !== null
+        ? {
+            amount:
+              typeof latest.metrics.buy_box_price_90d === 'string' ||
+              typeof latest.metrics.buy_box_price_90d === 'number'
+                ? latest.metrics.buy_box_price_90d
+                : String(latest.metrics.buy_box_price_90d),
             currency_code: typeof currencyCode === 'string' ? currencyCode : null,
           }
         : null,

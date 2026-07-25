@@ -19,7 +19,7 @@ const selectionStorageKey = 'selleros.workspace-selection';
 
 const navItems = [
   { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Products', to: '/products' },
+  { label: 'Research', to: '/products' },
   { label: 'Imports', to: '/imports' },
   { label: 'Planning', to: '/planning' },
 ];

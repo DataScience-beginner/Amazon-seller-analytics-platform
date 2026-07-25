@@ -208,6 +208,34 @@ export type MoneyValue = {
   currency_code: string | null;
 };
 
+export type ResearchStatus =
+  'priority_research' | 'promising' | 'monitor' | 'insufficient_evidence' | 'avoid';
+
+export type BrandClassification = 'declared_brand' | 'likely_generic' | 'unknown';
+
+export type ResearchAssessment = {
+  status: ResearchStatus;
+  brand_classification: BrandClassification;
+  policy_version: string;
+  configuration_checksum: string;
+  reason_codes: string[];
+  positive_signals: string[];
+  risk_signals: string[];
+  missing_evidence: string[];
+};
+
+export type ResearchScreen = {
+  id:
+    | 'priority_research'
+    | 'promising'
+    | 'low_competition'
+    | 'stable_pricing'
+    | 'needs_evidence'
+    | 'all';
+  label: string;
+  description: string;
+};
+
 export type ProductSummary = {
   id: string;
   asin: string;
@@ -226,6 +254,13 @@ export type ProductSummary = {
   confidence_score?: number;
   offer_count?: number | null;
   buy_box_price?: MoneyValue | number | string | null;
+  buy_box_price_90d?: MoneyValue | number | string | null;
+  sales_rank?: number | null;
+  sales_rank_90d?: number | null;
+  estimated_monthly_bought?: number | null;
+  buy_box_winner_count_90d?: number | null;
+  buy_box_oos_percentage_90d?: number | string | null;
+  research?: ResearchAssessment | null;
   latest_snapshot_at?: string | null;
   latest_observed_on?: string | null;
 };
@@ -236,6 +271,9 @@ export type ProductListResponse = {
   page: number;
   page_size: number;
   total_pages?: number;
+  research_policy_version?: string;
+  research_configuration_checksum?: string;
+  screens?: ResearchScreen[];
   available_filters?: {
     strategies?: string[];
     categories?: string[];
@@ -260,14 +298,24 @@ export type ProductListItemResponse = {
   latest_snapshot_at: string | null;
   latest_observed_on: string | null;
   buy_box_price: string | null;
+  buy_box_price_90d: string | null;
   currency_code: string | null;
   offer_count: number | null;
+  sales_rank: number | null;
+  sales_rank_90d: number | null;
+  estimated_monthly_bought: number | null;
+  buy_box_winner_count_90d: number | null;
+  buy_box_oos_percentage_90d: string | null;
+  demand_score: number | null;
+  competition_score: number | null;
+  price_stability_score: number | null;
   overall_opportunity_score: number | null;
   data_confidence_score: number | null;
   strategy: string | null;
   recommendation_confidence: number | null;
   score_formula_version: string | null;
   strategy_rules_version: string | null;
+  research: ResearchAssessment | null;
   data_quality_codes: string[];
 };
 
@@ -283,6 +331,9 @@ export type ProductListApiResponse = {
     has_next: boolean;
   };
   query: Omit<ProductQuery, 'organisation_id' | 'marketplace_id'>;
+  research_policy_version: string;
+  research_configuration_checksum: string;
+  screens: ResearchScreen[];
 };
 
 export type RecommendationEvidenceResponse = {
@@ -342,6 +393,7 @@ export type ProductDetailApiResponse = {
     amazon_url: string | null;
     created_at: string;
   };
+  research: ResearchAssessment | null;
   latest_snapshot: ProductSnapshotResponse | null;
   notices: Array<{
     code: string;
@@ -471,6 +523,8 @@ export type ProductQuery = {
   organisation_id: string;
   marketplace_id: string;
   search?: string;
+  screen?: string;
+  brand_classification?: string;
   strategy?: string;
   category?: string;
   min_score?: string;

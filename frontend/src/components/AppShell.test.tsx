@@ -104,7 +104,7 @@ describe('AppShell', () => {
 
     expect(await screen.findByRole('heading', { name: 'Portfolio overview' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Products' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Research' })).toHaveAttribute('href', '/products');
     expect(screen.getByRole('link', { name: 'Imports' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Planning' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Skip to main content' })).toBeInTheDocument();

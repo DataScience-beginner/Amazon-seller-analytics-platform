@@ -128,7 +128,10 @@ listing. Alternative server sorts do not change the canonical research-priority 
 
 Keepa image cells may contain semicolon-separated URLs. Responses select the first valid HTTP(S)
 candidate as the thumbnail while the immutable source payload retains the complete original cell.
-Amazon links are derived only from the scoped marketplace code and validated ASIN.
+Amazon links prefer a validated imported `URL: Amazon`, then a preserved `URL: URL slug` combined
+with the scoped marketplace and validated ASIN, and finally the marketplace `/dp/{ASIN}` fallback.
+An imported URL is accepted only when its hostname matches the scoped marketplace and its path
+contains the same ASIN.
 
 `GET /api/v1/dashboard/dataset-overview` accepts the same required scope plus an optional exact
 `category`. It returns the same aggregate contract for the selected category. The dashboard uses

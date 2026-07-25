@@ -4,7 +4,7 @@ from collections import Counter
 from decimal import Decimal
 from math import isfinite
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from sqlalchemy.orm import Session
 
@@ -393,7 +393,7 @@ class PortfolioService:
                 image_url=_safe_http_url(
                     product.image_url or (latest_snapshot.image_url if latest_snapshot else None)
                 ),
-                amazon_url=_amazon_url(marketplace.code, product.asin),
+                amazon_url=_amazon_url(marketplace.code, product.asin, latest_snapshot),
                 created_at=product.created_at,
             ),
             research=(
@@ -565,7 +565,7 @@ class PortfolioService:
                         record.product.image_url
                         or (snapshot.image_url if snapshot is not None else None)
                     ),
-                    amazon_url=_amazon_url(marketplace.code, record.product.asin),
+                    amazon_url=_amazon_url(marketplace.code, record.product.asin, snapshot),
                     currency_code=snapshot.currency_code if snapshot is not None else None,
                     selling_price=price,
                     selling_price_source=source,
@@ -806,13 +806,39 @@ def _safe_http_url(value: str | None) -> str | None:
     return None
 
 
-def _amazon_url(marketplace_code: str, asin: str) -> str | None:
+def _amazon_url(
+    marketplace_code: str,
+    asin: str,
+    snapshot: ProductSnapshot | None = None,
+) -> str | None:
     normalized_code = marketplace_code.strip().upper()
     domain = _AMAZON_DOMAINS.get(normalized_code)
     normalized_asin = asin.strip().upper()
     if domain is None or len(normalized_asin) != 10 or not normalized_asin.isalnum():
         return None
+    imported_url = _safe_http_url(snapshot.amazon_url if snapshot else None)
+    if imported_url is not None:
+        parsed = urlsplit(imported_url)
+        if (
+            parsed.hostname == domain
+            and f"/dp/{normalized_asin}".casefold() in parsed.path.casefold()
+        ):
+            return imported_url
+    slug = _source_text(snapshot, "URL: URL slug") if snapshot else None
+    if slug:
+        safe_slug = quote(slug.strip(), safe="-_")
+        if safe_slug:
+            return f"https://{domain}/{safe_slug}/dp/{normalized_asin}"
     return f"https://{domain}/dp/{normalized_asin}"
+
+
+def _source_text(snapshot: ProductSnapshot, header: str) -> str | None:
+    for cell in snapshot.source_payload:
+        if cell.get("header") == header:
+            value = cell.get("value")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
 
 
 def _ranking_signals(record: ProductReadRecord) -> RankingSignals:
@@ -1114,7 +1140,7 @@ def _product_summary(
         category=product.category or (snapshot.category if snapshot else None),
         subcategory=product.subcategory or (snapshot.subcategory if snapshot else None),
         image_url=_safe_http_url(product.image_url or (snapshot.image_url if snapshot else None)),
-        amazon_url=_amazon_url(marketplace_code, product.asin),
+        amazon_url=_amazon_url(marketplace_code, product.asin, snapshot),
         latest_snapshot_id=snapshot.id if snapshot else None,
         latest_snapshot_at=snapshot.snapshot_at if snapshot else None,
         latest_observed_on=snapshot.observed_on if snapshot else None,

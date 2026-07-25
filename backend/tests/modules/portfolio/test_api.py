@@ -131,6 +131,8 @@ def _add_product(
     price_stability_score: int = 85,
     monthly_bought: int | None = None,
     image_url: str | None = None,
+    amazon_url: str | None = None,
+    url_slug: str | None = None,
     observed_on: date | None = date(2026, 1, 1),
     import_batch: ImportBatch | None = None,
 ) -> Product:
@@ -165,12 +167,14 @@ def _add_product(
         buy_box_winner_count_90d=2,
         buy_box_oos_percentage_90d=Decimal("2.5"),
         image_url=image_url,
+        amazon_url=amazon_url,
         source_payload=[
             {
                 "ordinal": 11,
                 "header": "Monthly Sales Trends: Bought in past month",
                 "value": monthly_bought,
-            }
+            },
+            *([{"ordinal": 101, "header": "URL: URL slug", "value": url_slug}] if url_slug else []),
         ],
     )
     session.add(snapshot)
@@ -225,6 +229,7 @@ def test_research_ranking_is_global_transparent_and_marketplace_safe(
         price_stability_score=90,
         monthly_bought=300,
         image_url=("https://m.media-amazon.com/first.jpg;" "https://m.media-amazon.com/second.jpg"),
+        url_slug="Stronger-Candidate-Toy",
     )
     weaker = _add_product(
         db_session,
@@ -267,7 +272,9 @@ def test_research_ranking_is_global_transparent_and_marketplace_safe(
     assert payload["items"][0]["product"]["product_id"] == stronger.id
     assert payload["items"][0]["ranking"]["rank"] == 1
     assert payload["items"][0]["product"]["image_url"] == ("https://m.media-amazon.com/first.jpg")
-    assert payload["items"][0]["product"]["amazon_url"] == ("https://www.amazon.in/dp/B000RANK01")
+    assert payload["items"][0]["product"]["amazon_url"] == (
+        "https://www.amazon.in/Stronger-Candidate-Toy/dp/B000RANK01"
+    )
     weak_payload = next(
         item for item in payload["items"] if item["product"]["product_id"] == weaker.id
     )

@@ -50,3 +50,8 @@ listings because seller concentration can indicate unavailable supply or a contr
 than easy entry. Each result returns the formula version, configuration checksum, component scores,
 weights and reason codes. It ranks what to research first; supplier cost, fees, authorisation and a
 human buying decision remain separate gates.
+
+Listing navigation uses preserved evidence without scraping: a validated imported Amazon URL wins,
+then the exact Keepa URL slug is combined with the scoped marketplace and ASIN, then a bare
+marketplace `/dp/{ASIN}` is used as the final fallback. Cross-marketplace or mismatched-ASIN imported
+URLs are rejected.

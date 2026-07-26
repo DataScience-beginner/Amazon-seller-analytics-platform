@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Local env and generated data
+.env
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+uploads/
+backend/uploads/
+KeepaExport-*.csv
+*.xlsx
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo

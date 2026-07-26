@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "registry_id": "keepa",
+  "version": "1.0.0",
+  "fields": [
+    {
+      "canonical_field": "asin",
+      "required": true,
+      "value_type": "text",
+      "aliases": ["ASIN", "Amazon ASIN", "Product ASIN"],
+      "description": "Amazon Standard Identification Number used with organisation and marketplace identity."
+    },
+    {
+      "canonical_field": "title",
+      "required": false,
+      "value_type": "text",
+      "aliases": ["Title", "Product Title", "Product Name"],
+      "description": "Observed product title."
+    },
+    {
+      "canonical_field": "brand",
+      "required": false,
+      "value_type": "text",
+      "aliases": ["Brand", "Manufacturer Brand"],
+      "description": "Observed brand name."
+    },
+    {
+      "canonical_field": "category",
+      "required": false,
+      "value_type": "text",
+      "aliases": ["Category", "Categories: Root", "Root Category"],
+      "description": "Observed root category."
+    },
+    {
+      "canonical_field": "subcategory",
+      "required": false,
+      "value_type": "text",
+      "aliases": ["Subcategory", "Categories: Sub", "Sub Category"],
+      "description": "Observed subcategory."
+    },
+    {
+      "canonical_field": "buy_box_price",
+      "required": false,
+      "value_type": "decimal",
+      "aliases": ["Buy Box: Current", "Current Buy Box Price"],
+      "description": "Current observed Buy Box price, represented as an exact decimal string."
+    },
+    {
+      "canonical_field": "buy_box_price_90d",
+      "required": false,
+      "value_type": "decimal",
+      "aliases": ["Buy Box: 90 days avg.", "Buy Box 90 Days Average", "90 Day Average Buy Box Price"],
+      "description": "Observed 90-day average Buy Box price."
+    },
+    {
+      "canonical_field": "sales_rank_current",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["Sales Rank: Current", "Current Sales Rank"],
+      "description": "Current observed sales rank."
+    },
+    {
+      "canonical_field": "sales_rank_90d",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["Sales Rank: 90 days avg.", "Sales Rank 90 Days Average", "90 Day Average Sales Rank"],
+      "description": "Observed 90-day average sales rank."
+    },
+    {
+      "canonical_field": "sales_rank_drops_90d",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["Sales Rank: Drops last 90 days", "Sales Rank Drops 90 Days", "Rank Drops Last 90 Days"],
+      "description": "Observed sales-rank drop count over 90 days."
+    },
+    {
+      "canonical_field": "rating",
+      "required": false,
+      "value_type": "decimal",
+      "aliases": ["Reviews: Rating", "Rating", "Review Rating"],
+      "description": "Observed review rating."
+    },
+    {
+      "canonical_field": "review_count",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["Reviews: Rating Count", "Review Count", "Reviews Count"],
+      "description": "Observed review count."
+    },
+    {
+      "canonical_field": "new_offer_count",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["New Offer Count: Current", "Current New Offer Count", "New Offer Count"],
+      "description": "Current observed new-offer count."
+    },
+    {
+      "canonical_field": "total_offer_count",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["Total Offer Count", "Offer Count: Total", "Current Total Offer Count"],
+      "description": "Current observed total-offer count."
+    },
+    {
+      "canonical_field": "buy_box_winner_count_90d",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["Buy Box: Winner Count 90 days", "90 Day Buy Box Winner Count"],
+      "description": "Observed number of Buy Box winners over 90 days."
+    },
+    {
+      "canonical_field": "buy_box_oos_percentage_90d",
+      "required": false,
+      "value_type": "percentage",
+      "aliases": ["Buy Box: 90 days OOS", "Buy Box OOS 90 Days", "90 Day Buy Box Out of Stock"],
+      "description": "Observed percentage of time the Buy Box was out of stock over 90 days."
+    },
+    {
+      "canonical_field": "buy_box_is_fba",
+      "required": false,
+      "value_type": "boolean",
+      "aliases": ["Buy Box: Is FBA", "FBA Buy Box"],
+      "description": "Whether the observed Buy Box offer is fulfilled by Amazon."
+    },
+    {
+      "canonical_field": "fba_pick_pack_fee",
+      "required": false,
+      "value_type": "decimal",
+      "aliases": ["FBA Pick&Pack Fee", "Pick Pack Fee"],
+      "description": "Observed FBA pick-and-pack fee."
+    },
+    {
+      "canonical_field": "referral_fee",
+      "required": false,
+      "value_type": "decimal",
+      "aliases": ["Referral Fee based on current Buy Box price", "Referral Fee", "Current Referral Fee"],
+      "description": "Observed referral fee based on the current Buy Box price."
+    },
+    {
+      "canonical_field": "referral_fee_percentage",
+      "required": false,
+      "value_type": "percentage",
+      "aliases": ["Referral Fee %", "Referral Fee Percentage", "Referral Percentage"],
+      "description": "Observed referral-fee percentage."
+    },
+    {
+      "canonical_field": "monthly_sold",
+      "required": false,
+      "value_type": "integer",
+      "aliases": ["Monthly Sales Trends: Monthly Sold (Last Known)", "Monthly Sold", "Last Known Monthly Sold"],
+      "description": "Last known observed monthly sold quantity."
+    },
+    {
+      "canonical_field": "image_url",
+      "required": false,
+      "value_type": "url",
+      "aliases": ["Image", "Image URL", "Product Image URL"],
+      "description": "Observed product image URL."
+    },
+    {
+      "canonical_field": "amazon_url",
+      "required": false,
+      "value_type": "url",
+      "aliases": ["URL: Amazon", "Amazon URL", "Product URL"],
+      "description": "Observed Amazon product listing URL."
+    }
+  ]
+}

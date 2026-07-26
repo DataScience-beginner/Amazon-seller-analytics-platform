@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "formula_version": "selleros.research-priority.v1",
+  "weights": {
+    "demand": 30,
+    "price_stability": 20,
+    "competition_quality": 15,
+    "data_confidence": 15,
+    "sales_rank_trend": 10,
+    "buy_box_availability": 10
+  },
+  "rank_trend": {
+    "full_score_at_or_below": "0.75",
+    "zero_score_at_or_above": "1.25"
+  },
+  "competition": {
+    "single_offer_cap": 50,
+    "zero_offer_cap": 25
+  },
+  "buy_box_availability": {
+    "missing_oos_score": 50
+  }
+}

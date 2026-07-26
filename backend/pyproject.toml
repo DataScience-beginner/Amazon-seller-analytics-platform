@@ -1,0 +1,49 @@
+[project]
+name = "selleros-backend"
+version = "0.1.0"
+description = "SellerOS modular monolith backend"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn[standard]==0.34.3",
+  "pydantic-settings==2.7.1",
+  "sqlalchemy==2.0.36",
+  "alembic==1.14.0",
+  "python-multipart==0.0.20",
+  "openpyxl==3.1.5",
+  "psycopg[binary]==3.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "anyio==4.14.2",
+  "pytest==8.3.4",
+  "httpx==0.28.1",
+  "ruff==0.8.4",
+  "mypy==1.14.1",
+  "types-openpyxl==3.1.5.20260518",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+strict = true
+exclude = ["alembic"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

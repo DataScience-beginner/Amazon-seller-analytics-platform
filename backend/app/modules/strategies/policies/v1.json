@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "rules_version": "strategy-v1.0.0",
+  "score_range": {
+    "minimum": 0,
+    "maximum": 100
+  },
+  "low_confidence_threshold": 50,
+  "default_strategy": "monitor",
+  "priority": [
+    "clearance_watch",
+    "avoid",
+    "cash_cow",
+    "growth",
+    "premium_margin",
+    "test_buy",
+    "discovery",
+    "monitor"
+  ],
+  "thresholds": {
+    "discovery": {
+      "opportunity_min": 45,
+      "minimum_history_months": 2
+    },
+    "test_buy": {
+      "demand_min": 65,
+      "opportunity_min": 65,
+      "competition_min": 45,
+      "price_stability_min": 45
+    },
+    "growth": {
+      "demand_min": 75,
+      "opportunity_min": 75,
+      "competition_min": 45,
+      "price_stability_min": 50,
+      "profitability_min": 60,
+      "cash_efficiency_min": 55
+    },
+    "cash_cow": {
+      "demand_min": 70,
+      "opportunity_min": 70,
+      "price_stability_min": 75,
+      "profitability_min": 65,
+      "cash_efficiency_min": 70,
+      "history_months_min": 6
+    },
+    "premium_margin": {
+      "demand_min": 35,
+      "demand_max": 65,
+      "opportunity_min": 55,
+      "price_stability_min": 55,
+      "profitability_min": 75,
+      "contribution_margin_percent_min": "30"
+    },
+    "monitor": {},
+    "clearance_watch": {
+      "units_on_hand_min": 1,
+      "inventory_risk_min": 75,
+      "stock_cover_days_min": "120",
+      "risk_triggers_required": 1
+    },
+    "avoid": {
+      "opportunity_max": 30,
+      "demand_max": 25,
+      "competition_max": 25,
+      "price_stability_max": 30,
+      "profitability_max": 30,
+      "contribution_margin_percent_max": "0"
+    }
+  }
+}

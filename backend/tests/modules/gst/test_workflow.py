@@ -110,7 +110,7 @@ def test_guided_gst_workflow_requires_approval_and_user_filing_confirmation(
             period_month=date(2026, 4, 1),
         ),
     )
-    workbook_path = tmp_path / "GSTR1-APRIL-2026-SYNTHETIC.xlsx"
+    workbook_path = tmp_path / "GSTR1-APRIL-2026-SYNTHETIC-29ABCDE1234F1Z5.xlsx"
     _workbook(workbook_path)
     filing = add_amazon_gstr1(
         db_session,
@@ -170,6 +170,41 @@ def test_amazon_gstr1_filename_period_must_match_selected_period(
     _workbook(workbook_path)
 
     with pytest.raises(ApplicationError, match="does not match"):
+        add_amazon_gstr1(
+            db_session,
+            filing.id,
+            organisation.id,
+            marketplace.id,
+            _staged(workbook_path, workbook_path.name),
+        )
+
+
+def test_amazon_gstr1_filename_gstin_must_match_registration(
+    db_session: Session, tmp_path: Path
+) -> None:
+    organisation, marketplace = _workspace(db_session)
+    registration = create_registration(
+        db_session,
+        RegistrationCreate(
+            organisation_id=organisation.id,
+            marketplace_id=marketplace.id,
+            gstin="29ABCDE1234F1Z5",
+            legal_name="Synthetic GST Seller",
+        ),
+    )
+    filing = create_filing(
+        db_session,
+        FilingCreate(
+            organisation_id=organisation.id,
+            marketplace_id=marketplace.id,
+            gst_registration_id=registration.id,
+            period_month=date(2026, 4, 1),
+        ),
+    )
+    workbook_path = tmp_path / "GSTR1-APRIL-2026-SYNTHETIC-33ABCDE1234F1Z5.xlsx"
+    _workbook(workbook_path)
+
+    with pytest.raises(ApplicationError, match="GSTIN does not match"):
         add_amazon_gstr1(
             db_session,
             filing.id,

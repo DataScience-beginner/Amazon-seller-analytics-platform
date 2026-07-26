@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -15,6 +16,9 @@ from app.modules.imports.workbook import validate_ooxml_archive
 FORMULA_VERSION = "selleros.gst-india.amazon-gstr1.v1"
 MAX_GST_ROWS_PER_SHEET = 100_000
 MAX_GST_COLUMNS_PER_SHEET = 64
+_GSTIN_IN_FILENAME = re.compile(
+    r"(?:^|-)([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z])(?:-|\.|$)"
+)
 SHEETS = {
     "B2B": ("Taxable Value", "Cess Amount"),
     "B2B CN (cdnr)": ("Taxable Value", "Cess Amount"),
@@ -109,6 +113,11 @@ def period_from_filename(filename: str) -> date | None:
         if part in months and parts[index + 1].isdigit():
             return date(int(parts[index + 1]), months[part], 1)
     return None
+
+
+def gstin_from_filename(filename: str) -> str | None:
+    match = _GSTIN_IN_FILENAME.search(filename.upper())
+    return match.group(1) if match else None
 
 
 def _decimal(value: Any) -> Decimal:

@@ -8,8 +8,8 @@ GST Portal, determine legal entitlement to input tax credit, pay tax, sign or fi
 1. Add a GST registration to an Amazon India workspace. SellerOS stores the GSTIN as scoped business
    evidence and returns only a masked value through workflow APIs.
 2. Create a monthly filing period. A registration and month may have only one workflow.
-3. Upload the Amazon GST Ready-to-File GSTR-1 `.xlsx` report. The filename period, OOXML archive,
-   required sheets, dimensions, headers and numeric fields are validated.
+3. Upload the Amazon GST Ready-to-File GSTR-1 `.xlsx` report. The filename period and GSTIN, OOXML
+   archive, required sheets, dimensions, headers and numeric fields are validated.
 4. Review B2B, B2B credit/debit note, B2C Large, B2C Small and HSN record counts, calculated totals
    and any exceptions. Individual source rows remain preserved in the immutable parsed document.
 5. Explicitly confirm that the evidence contains all outward supplies and approve the draft.

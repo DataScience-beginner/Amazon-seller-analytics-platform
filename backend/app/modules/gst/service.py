@@ -22,7 +22,12 @@ from app.models.domain import (
     GstValidationException,
     Marketplace,
 )
-from app.modules.gst.kernel import FORMULA_VERSION, parse_amazon_gstr1, period_from_filename
+from app.modules.gst.kernel import (
+    FORMULA_VERSION,
+    gstin_from_filename,
+    parse_amazon_gstr1,
+    period_from_filename,
+)
 from app.modules.gst.schemas import (
     DocumentResponse,
     DraftResponse,
@@ -208,6 +213,9 @@ def add_amazon_gstr1(
     staged: StagedUpload,
 ) -> FilingResponse:
     filing = _filing(session, filing_id, organisation_id, marketplace_id)
+    registration = _registration(
+        session, organisation_id, marketplace_id, filing.gst_registration_id
+    )
     if filing.status in {
         GstFilingStatus.approved,
         GstFilingStatus.exported,
@@ -221,6 +229,13 @@ def add_amazon_gstr1(
         raise ApplicationError(
             "gst_document_period_mismatch",
             "The workbook period does not match the selected filing month",
+            status_code=422,
+        )
+    detected_gstin = gstin_from_filename(staged.original_filename)
+    if detected_gstin is not None and detected_gstin != registration.gstin:
+        raise ApplicationError(
+            "gst_document_registration_mismatch",
+            "The workbook GSTIN does not match the selected GST registration",
             status_code=422,
         )
     if session.scalar(

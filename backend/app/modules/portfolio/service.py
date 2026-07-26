@@ -891,6 +891,7 @@ def _research_ranking_numeric_sort_value(
             ranking, "buy_box_availability"
         ),
         ResearchRankingSortField.price: snapshot.buy_box_price if snapshot else None,
+        ResearchRankingSortField.sales_rank: snapshot.sales_rank if snapshot else None,
         ResearchRankingSortField.offer_count: record.offer_count,
         ResearchRankingSortField.monthly_demand: (
             _estimated_monthly_bought(snapshot) if snapshot else None

@@ -345,6 +345,7 @@ export type ResearchRankingSort =
   | 'sales_rank_trend'
   | 'buy_box_availability'
   | 'price'
+  | 'sales_rank'
   | 'offer_count'
   | 'monthly_demand'
   | 'title';

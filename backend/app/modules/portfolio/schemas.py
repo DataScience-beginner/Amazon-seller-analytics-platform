@@ -63,6 +63,7 @@ class ResearchRankingSortField(StrEnum):
     sales_rank_trend = "sales_rank_trend"
     buy_box_availability = "buy_box_availability"
     price = "price"
+    sales_rank = "sales_rank"
     offer_count = "offer_count"
     monthly_demand = "monthly_demand"
     product_title = "title"

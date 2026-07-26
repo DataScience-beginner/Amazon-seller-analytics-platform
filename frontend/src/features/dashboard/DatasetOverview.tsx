@@ -187,7 +187,11 @@ function SubcategoryTables({
               Sort products by
               <select
                 value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as ResearchRankingSort)}
+                onChange={(event) => {
+                  const nextSort = event.target.value as ResearchRankingSort;
+                  setSortBy(nextSort);
+                  setSortDirection(nextSort === 'sales_rank' ? 'asc' : 'desc');
+                }}
               >
                 <option value="research_priority">Research priority</option>
                 <option value="demand">Demand</option>
@@ -198,6 +202,7 @@ function SubcategoryTables({
                 <option value="buy_box_availability">Buy Box availability</option>
                 <option value="monthly_demand">Estimated monthly demand</option>
                 <option value="price">Buy Box price</option>
+                <option value="sales_rank">Amazon sales rank (BSR)</option>
                 <option value="offer_count">Seller offers</option>
                 <option value="title">Product title</option>
               </select>
@@ -235,6 +240,8 @@ function SubcategoryTables({
                 <tr>
                   <th scope="col">Rank</th>
                   <th scope="col">Product</th>
+                  <th scope="col">Amazon BSR</th>
+                  <th scope="col">Offers</th>
                   <th scope="col">Priority score</th>
                   <th scope="col">Demand</th>
                   <th scope="col">Stability</th>
@@ -242,7 +249,6 @@ function SubcategoryTables({
                   <th scope="col">Confidence</th>
                   <th scope="col">Rank trend</th>
                   <th scope="col">Buy Box availability</th>
-                  <th scope="col">Seller offers</th>
                   <th scope="col">Buy Box</th>
                 </tr>
               </thead>
@@ -254,6 +260,14 @@ function SubcategoryTables({
                     <tr key={product.id}>
                       <td>
                         <strong>#{ranking.rank}</strong>
+                      </td>
+                      <td>
+                        {formatNumber(product.sales_rank, 0)}
+                        <small className="cell-note">Observed current rank</small>
+                      </td>
+                      <td>
+                        {formatNumber(product.offer_count, 0)}
+                        <small className="cell-note">Observed offers</small>
                       </td>
                       <td>
                         <div className="product-identity">
@@ -294,7 +308,6 @@ function SubcategoryTables({
                       <td>{formatNumber(component('data_confidence'), 0)}</td>
                       <td>{formatNumber(component('sales_rank_trend'), 0)}</td>
                       <td>{formatNumber(component('buy_box_availability'), 0)}</td>
-                      <td>{formatNumber(product.offer_count, 0)}</td>
                       <td>{formatMoney(product.buy_box_price)}</td>
                     </tr>
                   );

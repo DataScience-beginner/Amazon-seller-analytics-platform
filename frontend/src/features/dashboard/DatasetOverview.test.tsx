@@ -269,6 +269,15 @@ describe('DatasetOverview', () => {
     expect(screen.getByRole('combobox', { name: 'Sort products by' })).toHaveValue(
       'research_priority',
     );
+    expect(screen.getByRole('columnheader', { name: 'Amazon BSR' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Offers' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Amazon sales rank (BSR)' })).toBeInTheDocument();
+    expect(screen.getByText('Observed current rank')).toBeInTheDocument();
+    expect(screen.getByText('Observed offers')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort products by' }), {
+      target: { value: 'sales_rank' },
+    });
+    expect(await screen.findByRole('combobox', { name: 'Direction' })).toHaveValue('asc');
     expect(screen.getByRole('link', { name: 'Open full category research' })).toHaveAttribute(
       'href',
       expect.stringContaining('category=Toys%20%26%20Games'),

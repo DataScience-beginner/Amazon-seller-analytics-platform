@@ -22,6 +22,12 @@ from app.models.domain import (
     StrategyRecommendation,
 )
 from app.modules.portfolio.api import router as portfolio_router
+from app.modules.portfolio.schemas import (
+    ResearchRankingQuery,
+    ResearchRankingSortField,
+    SortDirection,
+)
+from app.modules.portfolio.service import PortfolioService
 
 
 @contextmanager
@@ -129,6 +135,7 @@ def _add_product(
     demand_score: int = 85,
     competition_score: int = 85,
     price_stability_score: int = 85,
+    sales_rank: int = 10_000,
     monthly_bought: int | None = None,
     image_url: str | None = None,
     amazon_url: str | None = None,
@@ -158,7 +165,7 @@ def _add_product(
         buy_box_price=Decimal(price),
         buy_box_price_90d=Decimal(price),
         currency_code="INR",
-        sales_rank=10_000,
+        sales_rank=sales_rank,
         sales_rank_90d=12_000,
         sales_rank_drops_90d=80,
         monthly_sold=200,
@@ -227,6 +234,7 @@ def test_research_ranking_is_global_transparent_and_marketplace_safe(
         demand_score=95,
         competition_score=85,
         price_stability_score=90,
+        sales_rank=5_000,
         monthly_bought=300,
         image_url=("https://m.media-amazon.com/first.jpg;" "https://m.media-amazon.com/second.jpg"),
         url_slug="Stronger-Candidate-Toy",
@@ -249,26 +257,29 @@ def test_research_ranking_is_global_transparent_and_marketplace_safe(
         demand_score=65,
         competition_score=100,
         price_stability_score=70,
+        sales_rank=20_000,
         monthly_bought=100,
     )
     db_session.commit()
 
-    with _api_client(db_session) as client:
-        response = client.get(
-            "/api/v1/dashboard/research-ranking",
-            params={
-                "organisation_id": organisation.id,
-                "marketplace_id": marketplace.id,
-                "subcategory": "Cars",
-                "sort_by": "research_priority",
-                "sort_direction": "desc",
-            },
+    response = PortfolioService(db_session).research_ranking(
+        ResearchRankingQuery(
+            organisation_id=organisation.id,
+            marketplace_id=marketplace.id,
+            subcategory="Cars",
+            sort_by=ResearchRankingSortField.sales_rank,
+            sort_direction=SortDirection.ascending,
         )
+    )
 
-    assert response.status_code == 200
-    payload = response.json()
+    payload = response.model_dump(mode="json")
     assert payload["weights"]["demand"] == 30
     assert payload["formula_version"] == "selleros.research-priority.v1"
+    assert payload["sort_by"] == "sales_rank"
+    assert [item["product"]["sales_rank"] for item in payload["items"]] == [
+        5_000,
+        20_000,
+    ]
     assert payload["items"][0]["product"]["product_id"] == stronger.id
     assert payload["items"][0]["ranking"]["rank"] == 1
     assert payload["items"][0]["product"]["image_url"] == ("https://m.media-amazon.com/first.jpg")

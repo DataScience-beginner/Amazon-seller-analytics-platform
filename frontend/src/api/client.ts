@@ -25,6 +25,8 @@ import type {
   SupplierOffer,
   SupplierOfferListResponse,
   TestBuyRecommendation,
+  GstFiling,
+  GstRegistration,
   Workspace,
   WorkspaceCreateRequest,
   WorkspaceListResponse,
@@ -433,5 +435,127 @@ export function createTestBuyRecommendation(
   return request<TestBuyRecommendation>(
     `/products/${encodeURIComponent(productId)}/test-buy-scenarios${scope}`,
     { method: 'POST', body: command },
+  );
+}
+
+export function fetchGstRegistrations(
+  organisationId: string,
+  marketplaceId: string,
+  signal?: AbortSignal,
+): Promise<GstRegistration[]> {
+  return request<GstRegistration[]>(
+    `/financials/gst-india/registrations${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+    })}`,
+    { signal },
+  );
+}
+
+export function createGstRegistration(command: {
+  organisation_id: string;
+  marketplace_id: string;
+  gstin: string;
+  legal_name: string;
+  filing_frequency: 'monthly' | 'quarterly';
+}): Promise<GstRegistration> {
+  return request<GstRegistration>('/financials/gst-india/registrations', {
+    method: 'POST',
+    body: command,
+  });
+}
+
+export function fetchGstFilings(
+  organisationId: string,
+  marketplaceId: string,
+  signal?: AbortSignal,
+): Promise<{ items: GstFiling[] }> {
+  return request<{ items: GstFiling[] }>(
+    `/financials/gst-india/filings${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+    })}`,
+    { signal },
+  );
+}
+
+export function createGstFiling(command: {
+  organisation_id: string;
+  marketplace_id: string;
+  gst_registration_id: string;
+  period_month: string;
+}): Promise<GstFiling> {
+  return request<GstFiling>('/financials/gst-india/filings', {
+    method: 'POST',
+    body: command,
+  });
+}
+
+export function uploadAmazonGstr1(
+  filingId: string,
+  organisationId: string,
+  marketplaceId: string,
+  file: File,
+): Promise<GstFiling> {
+  const body = new FormData();
+  body.set('organisation_id', organisationId);
+  body.set('marketplace_id', marketplaceId);
+  body.set('file', file);
+  return request<GstFiling>(
+    `/financials/gst-india/filings/${encodeURIComponent(filingId)}/amazon-gstr1`,
+    { method: 'POST', body },
+  );
+}
+
+export function approveGstFiling(
+  filingId: string,
+  organisationId: string,
+  marketplaceId: string,
+): Promise<GstFiling> {
+  return request<GstFiling>(
+    `/financials/gst-india/filings/${encodeURIComponent(filingId)}/approve${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+    })}`,
+    { method: 'POST', body: { completeness_confirmed: true } },
+  );
+}
+
+export async function downloadGstWorkingPaper(
+  filingId: string,
+  organisationId: string,
+  marketplaceId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_ROOT}/financials/gst-india/filings/${encodeURIComponent(
+      filingId,
+    )}/working-paper${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+    })}`,
+    { method: 'POST' },
+  );
+  if (!response.ok) throw await parseError(response);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `selleros-gst-working-paper-${filingId}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function confirmGstFiled(
+  filingId: string,
+  organisationId: string,
+  marketplaceId: string,
+  arn: string,
+): Promise<GstFiling> {
+  return request<GstFiling>(
+    `/financials/gst-india/filings/${encodeURIComponent(filingId)}/confirm-filed${queryString({
+      organisation_id: organisationId,
+      marketplace_id: marketplaceId,
+    })}`,
+    { method: 'POST', body: { arn } },
   );
 }

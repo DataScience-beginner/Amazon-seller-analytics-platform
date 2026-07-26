@@ -7,6 +7,7 @@ import { WorkspaceContext, type WorkspaceSelection } from '../app/workspace';
 import { DashboardPage } from '../pages/DashboardPage';
 import { ImportDetailPage } from '../pages/ImportDetailPage';
 import { ImportsPage } from '../pages/ImportsPage';
+import { GstIndiaPage } from '../pages/GstIndiaPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlanningPage } from '../pages/PlanningPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
@@ -17,11 +18,12 @@ import { ErrorState, LoadingState } from './Feedback';
 
 const selectionStorageKey = 'selleros.workspace-selection';
 
-const navItems = [
+const navItems: Array<{ label: string; to: string; group?: string }> = [
   { label: 'Dashboard', to: '/dashboard' },
   { label: 'Research', to: '/products' },
   { label: 'Imports', to: '/imports' },
   { label: 'Planning', to: '/planning' },
+  { label: 'GST India', to: '/financials/tax-filing/gst-india', group: 'Financials · Tax filing' },
 ];
 
 function firstSelection(workspaces: Workspace[]): WorkspaceSelection | null {
@@ -67,6 +69,7 @@ function RouteContent() {
     return <ImportDetailPage importId={decodeURIComponent(pathname.slice('/imports/'.length))} />;
   }
   if (pathname === '/planning') return <PlanningPage />;
+  if (pathname === '/financials/tax-filing/gst-india') return <GstIndiaPage />;
   if (pathname === '/setup') return <WorkspaceSetupPage />;
   return <NotFoundPage />;
 }
@@ -108,16 +111,21 @@ function Shell({
             <span>Decision intelligence</span>
           </Link>
           <nav aria-label="Primary navigation">
-            {navItems.map((item) => {
+            {navItems.map((item, index) => {
               const active =
                 item.to === '/dashboard'
                   ? pathname === '/' || pathname === '/dashboard'
                   : pathname === item.to || pathname.startsWith(`${item.to}/`);
-              return (
+              return [
+                item.group && navItems[index - 1]?.group !== item.group ? (
+                  <span className="nav-group" key={`${item.to}-group`}>
+                    {item.group}
+                  </span>
+                ) : null,
                 <Link to={item.to} key={item.to} aria-current={active ? 'page' : undefined}>
                   {item.label}
-                </Link>
-              );
+                </Link>,
+              ];
             })}
           </nav>
           <div className="sidebar__scope">

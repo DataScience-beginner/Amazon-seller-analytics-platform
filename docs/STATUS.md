@@ -19,11 +19,16 @@ decision-first SOS-304 product-research refinement.
 | SOS-305 | Complete | Dataset readiness, evidence coverage, category/subcategory, brand and selling-price distribution charts, single-category navigation and fail-closed revenue |
 | SOS-306 | Complete | Tabbed subcategory Keepa table and versioned configurable reverse target-sourcing-cost estimator |
 | SOS-307 | Complete | Explicit completed-import selector propagated through overview, category, products and sourcing estimates |
-| SOS-308 | Complete | Versioned transparent subcategory research ranking, server sorting, single-seller risk cap, safe thumbnails and validated imported/slugged marketplace Amazon links |
+| SOS-308 | Complete | Versioned transparent subcategory research ranking, server sorting including observed Amazon BSR and offer count, single-seller risk cap, safe thumbnails and validated imported/slugged marketplace Amazon links |
 | SOS-401 | Complete | Append-only product/default cost revisions, explicit GST basis, fee provenance and audit history |
 | SOS-402 | Complete | Versioned Decimal v2 economics with net-revenue/output-GST trace, eight required metrics and fail-closed partial states |
 | SOS-501 | Complete | Immutable scoped quotations with supplier-name evidence, MOQ/lead time/validity and sealed price tiers |
 | SOS-502 | Complete | Three persisted advisory scenarios with source IDs, evidence, aggregate outcome and demand/confidence/lead-time/budget gates |
+| SOS-1001 | MVP complete | Scoped GST registrations, filing periods and explicit workflow state machine |
+| SOS-1002 | MVP complete | Bounded immutable Amazon GSTR-1 workbook evidence with checksum, period and OOXML validation |
+| SOS-1003 | MVP complete | Versioned Decimal GSTR-1 section parser, preserved rows, totals and fail-closed validation |
+| SOS-1004 | MVP complete | Guided preview, completeness approval, working-paper download and user-confirmed ARN |
+| SOS-1005 | Foundation complete | Agent-neutral evidence/task boundary documented; Gmail and GSP adapters remain future work |
 
 “Complete” means implemented against the repository acceptance criteria with synthetic automated
 coverage. It does not mean production SaaS readiness.

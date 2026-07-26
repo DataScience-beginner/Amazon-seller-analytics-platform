@@ -82,6 +82,27 @@ class TestBuyOutcome(StrEnum):
     blocked = "blocked"
 
 
+class GstFilingStatus(StrEnum):
+    collecting = "collecting"
+    validating = "validating"
+    needs_attention = "needs_attention"
+    draft_ready = "draft_ready"
+    approved = "approved"
+    exported = "exported"
+    user_confirmed_filed = "user_confirmed_filed"
+
+
+class GstDocumentStatus(StrEnum):
+    staged = "staged"
+    parsed = "parsed"
+    rejected = "rejected"
+
+
+class GstExceptionStatus(StrEnum):
+    open = "open"
+    resolved = "resolved"
+
+
 class Organisation(Base):
     __tablename__ = "organisations"
 
@@ -875,3 +896,118 @@ def _prevent_audit_event_update(_mapper: Any, _connection: Any, _target: AuditEv
 @event.listens_for(AuditEvent, "before_delete")
 def _prevent_audit_event_delete(_mapper: Any, _connection: Any, _target: AuditEvent) -> None:
     raise ValueError("Audit events are immutable")
+
+
+class GstRegistration(Base):
+    __tablename__ = "gst_registrations"
+    __table_args__ = (
+        UniqueConstraint("organisation_id", "gstin", name="uq_gst_registration_org_gstin"),
+        Index("ix_gst_registration_scope", "organisation_id", "marketplace_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organisation_id: Mapped[str] = mapped_column(ForeignKey("organisations.id"), nullable=False)
+    marketplace_id: Mapped[str] = mapped_column(ForeignKey("marketplaces.id"), nullable=False)
+    gstin: Mapped[str] = mapped_column(String(15), nullable=False)
+    legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    filing_frequency: Mapped[str] = mapped_column(String(16), nullable=False, default="monthly")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+class GstFilingPeriod(Base):
+    __tablename__ = "gst_filing_periods"
+    __table_args__ = (
+        UniqueConstraint("gst_registration_id", "period_month", name="uq_gst_filing_period"),
+        Index("ix_gst_filing_scope_period", "organisation_id", "marketplace_id", "period_month"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organisation_id: Mapped[str] = mapped_column(ForeignKey("organisations.id"), nullable=False)
+    marketplace_id: Mapped[str] = mapped_column(ForeignKey("marketplaces.id"), nullable=False)
+    gst_registration_id: Mapped[str] = mapped_column(
+        ForeignKey("gst_registrations.id"), nullable=False
+    )
+    period_month: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[GstFilingStatus] = mapped_column(
+        SAEnum(GstFilingStatus), default=GstFilingStatus.collecting, nullable=False
+    )
+    completeness_confirmed: Mapped[bool] = mapped_column(default=False, nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    filed_arn: Mapped[str | None] = mapped_column(String(64))
+    filed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+class GstSourceDocument(Base):
+    __tablename__ = "gst_source_documents"
+    __table_args__ = (
+        UniqueConstraint("filing_period_id", "checksum", name="uq_gst_document_period_checksum"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    filing_period_id: Mapped[str] = mapped_column(
+        ForeignKey("gst_filing_periods.id"), nullable=False, index=True
+    )
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[GstDocumentStatus] = mapped_column(
+        SAEnum(GstDocumentStatus), default=GstDocumentStatus.staged, nullable=False
+    )
+    schema_version: Mapped[str | None] = mapped_column(String(80))
+    parsed_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+class GstValidationException(Base):
+    __tablename__ = "gst_validation_exceptions"
+    __table_args__ = (Index("ix_gst_exception_period_status", "filing_period_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    filing_period_id: Mapped[str] = mapped_column(
+        ForeignKey("gst_filing_periods.id"), nullable=False
+    )
+    source_document_id: Mapped[str | None] = mapped_column(ForeignKey("gst_source_documents.id"))
+    code: Mapped[str] = mapped_column(String(120), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    status: Mapped[GstExceptionStatus] = mapped_column(
+        SAEnum(GstExceptionStatus), default=GstExceptionStatus.open, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+class GstReturnDraft(Base):
+    __tablename__ = "gst_return_drafts"
+    __table_args__ = (
+        UniqueConstraint("filing_period_id", "version", name="uq_gst_draft_period_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    filing_period_id: Mapped[str] = mapped_column(
+        ForeignKey("gst_filing_periods.id"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    formula_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    configuration_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    sections: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    totals: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+
+
+@event.listens_for(GstSourceDocument, "before_update")
+@event.listens_for(GstReturnDraft, "before_update")
+def _prevent_gst_evidence_update(
+    _mapper: Any, _connection: Any, _target: GstSourceDocument | GstReturnDraft
+) -> None:
+    raise ValueError("GST source documents and drafts are immutable")
+
+
+@event.listens_for(GstSourceDocument, "before_delete")
+@event.listens_for(GstReturnDraft, "before_delete")
+def _prevent_gst_evidence_delete(
+    _mapper: Any, _connection: Any, _target: GstSourceDocument | GstReturnDraft
+) -> None:
+    raise ValueError("GST source documents and drafts are immutable")

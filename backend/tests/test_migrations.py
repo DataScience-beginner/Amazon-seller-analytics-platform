@@ -43,6 +43,10 @@ def test_alembic_upgrade_and_downgrade(tmp_path: Path) -> None:
     assert "product_snapshots" in table_names
     assert "supplier_offer_price_tiers" in table_names
     assert "test_buy_recommendations" in table_names
+    assert "gst_registrations" in table_names
+    assert "gst_filing_periods" in table_names
+    assert "gst_source_documents" in table_names
+    assert "gst_return_drafts" in table_names
     cost_profile_columns = {column["name"] for column in inspector.get_columns("cost_profiles")}
     assert {
         "marketplace_id",

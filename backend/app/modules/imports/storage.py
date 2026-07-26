@@ -29,13 +29,15 @@ class StagedUpload:
     checksum_sha256: str
 
 
-def stage_xlsx_upload(upload: UploadFile, settings: Settings) -> StagedUpload:
+def stage_xlsx_upload(
+    upload: UploadFile, settings: Settings, *, purpose: str = "Keepa export"
+) -> StagedUpload:
     supplied_filename = (upload.filename or "").replace("\\", "/")
     original_filename = Path(supplied_filename).name.strip()
     if not original_filename or not original_filename.casefold().endswith(".xlsx"):
         raise ApplicationError(
             "unsupported_file_type",
-            "Upload a Keepa export in .xlsx format",
+            f"Upload a {purpose} in .xlsx format",
             status_code=415,
         )
     if len(original_filename) > 512:

@@ -83,6 +83,14 @@ class _HeaderCandidate:
     score: tuple[int, int, int, int, int]
 
 
+def validate_ooxml_archive(
+    source: WorkbookSource, limits: WorkbookSafetyLimits | None = None
+) -> str:
+    """Validate an OOXML archive without interpreting workbook cell content."""
+
+    return _validate_ooxml_archive(source, limits or WorkbookSafetyLimits())
+
+
 def inspect_workbook(
     source: WorkbookSource,
     registry: AliasRegistry,

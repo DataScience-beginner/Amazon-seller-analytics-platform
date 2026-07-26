@@ -468,6 +468,43 @@ the right order without mistaking imported market evidence for a purchase approv
 - Numerical responses are validated against deterministic calculations.
 - No autonomous purchasing or pricing actions.
 
+## Phase 7 — India GST compliance
+
+### Epic E13: Guided GST filing preparation
+
+#### SOS-1001 — Create GST registrations and filing periods
+
+- Add tenant/marketplace-scoped GST registrations and monthly or quarterly filing periods.
+- Use explicit workflow states from collecting through user-confirmed filed.
+- Never store GST Portal passwords, OTPs, EVCs or DSC material.
+
+#### SOS-1002 — Import immutable GST evidence
+
+- Accept bounded `.xlsx` GST reports and preserve filename, checksum, source type and upload time.
+- Parse Amazon GST Ready-to-File GSTR-1 sheets without fixed column positions.
+- Reject duplicate, malformed, wrong-period and wrong-registration evidence safely.
+- Keep private tax workbooks, exports and identifiers out of source control and logs.
+
+#### SOS-1003 — Prepare deterministic GST drafts
+
+- Produce traceable B2B, B2C, credit/debit-note and HSN summaries using Decimal arithmetic.
+- Validate GSTINs, periods, invoice uniqueness, place of supply, rates and tax totals.
+- Present unresolved exceptions before a draft can be approved.
+- Label every result Calculated or User confirmed; never claim legal filing.
+
+#### SOS-1004 — Guide approval, export and filing confirmation
+
+- Provide a step-by-step responsive workflow from evidence collection to preview.
+- Require explicit completeness declarations and human/CA approval.
+- Export working papers and a machine-readable filing package without submitting it.
+- Record ARN and filed evidence only after explicit user confirmation.
+
+#### SOS-1005 — Add agent-ready evidence collection boundaries
+
+- Model deterministic workflow steps and human-review gates independently of Gmail or GSP adapters.
+- Future agents may collect approved attachments, classify evidence and explain exceptions.
+- Agents may not change calculated totals, approve, pay or file returns.
+
 ## Definition of Done for every story
 
 A story is done only when:

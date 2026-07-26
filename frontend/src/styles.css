@@ -131,6 +131,126 @@ h2 {
   gap: 6px;
 }
 
+.sidebar .nav-group {
+  display: block;
+  margin: 1rem 0.65rem 0.35rem;
+  color: #9fb0cb;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gst-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.gst-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.gst-steps li,
+.gst-card {
+  border: 1px solid #dbe3ee;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.gst-steps li {
+  padding: 0.7rem;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.gst-steps li span {
+  display: block;
+  color: #08785b;
+  font-size: 1rem;
+}
+
+.gst-card {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.gst-card h2,
+.gst-card h3,
+.gst-card p {
+  margin: 0;
+}
+
+.gst-status {
+  grid-template-columns: minmax(10rem, 0.35fr) 1fr;
+  align-items: center;
+  border-color: #9bd9c5;
+  background: #f1fbf7;
+}
+
+.gst-status span,
+.gst-status strong {
+  display: block;
+  text-transform: capitalize;
+}
+
+.gst-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.7rem;
+}
+
+.gst-summary-grid article {
+  padding: 0.8rem;
+  border-radius: 0.6rem;
+  background: #f5f8fb;
+}
+
+.gst-summary-grid span,
+.gst-summary-grid strong,
+.gst-summary-grid small {
+  display: block;
+}
+
+.gst-summary-grid strong {
+  font-size: 1.4rem;
+}
+
+.gst-totals {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.gst-totals div,
+.evidence-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #e5eaf1;
+}
+
+.gst-totals dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .gst-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gst-status {
+    grid-template-columns: 1fr;
+  }
+}
+
 .sidebar nav a {
   min-height: 42px;
   padding: 10px;

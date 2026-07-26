@@ -386,6 +386,62 @@ export type ResearchRankingResponse = {
   };
 };
 
+export type GstRegistration = {
+  id: string;
+  organisation_id: string;
+  marketplace_id: string;
+  gstin_masked: string;
+  legal_name: string;
+  filing_frequency: 'monthly' | 'quarterly';
+};
+
+export type GstDraft = {
+  id: string;
+  version: number;
+  formula_version: string;
+  configuration_checksum: string;
+  sections: Record<string, Array<Record<string, unknown>>>;
+  totals: Record<string, string>;
+  created_at: string;
+};
+
+export type GstFiling = {
+  id: string;
+  scope: { organisation_id: string; marketplace_id: string };
+  registration: GstRegistration;
+  period_month: string;
+  status:
+    | 'collecting'
+    | 'validating'
+    | 'needs_attention'
+    | 'draft_ready'
+    | 'approved'
+    | 'exported'
+    | 'user_confirmed_filed';
+  completeness_confirmed: boolean;
+  approved_at: string | null;
+  filed_arn: string | null;
+  filed_at: string | null;
+  documents: Array<{
+    id: string;
+    source_type: string;
+    original_filename: string;
+    status: 'staged' | 'parsed' | 'rejected';
+    schema_version: string | null;
+    row_counts: Record<string, number>;
+    uploaded_at: string;
+  }>;
+  exceptions: Array<{
+    id: string;
+    code: string;
+    severity: string;
+    message: string;
+    status: 'open' | 'resolved';
+  }>;
+  latest_draft: GstDraft | null;
+  next_step: string;
+};
+
 export type ResearchRankingApiResponse = Omit<ResearchRankingResponse, 'items'> & {
   items: Array<{
     product: ProductListItemResponse;

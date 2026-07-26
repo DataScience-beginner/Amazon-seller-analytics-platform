@@ -20,6 +20,7 @@ sourcing decisions independent from HTTP, React and persistence.
 | `backend/app/modules/profitability` | Pure versioned Decimal unit-economics kernel |
 | `backend/app/modules/economics` | Scoped cost-profile revisions and economics read application |
 | `backend/app/modules/sourcing` | Supplier quotation application plus pure versioned test-buy policy |
+| `backend/app/modules/gst` | India GST evidence, deterministic GSTR-1 working-paper kernel and human-gated workflow |
 | `frontend/src/api` | Typed transport contracts and backend-response normalisation |
 | `frontend/src/pages` | Dashboard, imports, products, evidence and planning workflows |
 | `frontend/src/features/economics` | Cost, trace, supplier and advisory scenario components |
@@ -84,6 +85,18 @@ month cannot replace newer market evidence.
    Data Confidence evidence. The pure policy returns three scenarios; their aggregate outcome,
    source snapshot/score identifiers, structured evidence, append-only recommendation and audit event
    commit together. No order-side effect exists.
+
+## GST filing-preparation transaction
+
+1. A filing period is scoped by organisation, Amazon India marketplace, GST registration and month.
+2. The upload boundary streams a bounded workbook to a server-generated key and validates OOXML
+   safety before reading cached values.
+3. The pure versioned kernel maps required GSTR-1 sheets by header name, preserves source rows and
+   calculates Decimal totals. Filename periods are advisory evidence but a detected mismatch fails.
+4. The source document and a new immutable draft version commit together. No portal credential or
+   filing side effect exists.
+5. Human completeness confirmation gates approval; approval gates export; export gates explicit ARN
+   confirmation. `user_confirmed_filed` is never inferred.
 
 ## Data invariants
 

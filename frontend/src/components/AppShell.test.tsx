@@ -107,6 +107,10 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: 'Research' })).toHaveAttribute('href', '/products');
     expect(screen.getByRole('link', { name: 'Imports' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Planning' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'GST India' })).toHaveAttribute(
+      'href',
+      '/financials/tax-filing/gst-india',
+    );
     expect(screen.getByRole('link', { name: 'Skip to main content' })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'System status: verified' })).toHaveTextContent(
       'System verified',
@@ -118,6 +122,29 @@ describe('AppShell', () => {
       expect.stringContaining('organisation_id=org-1&marketplace_id=market-1'),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it('opens the guided GST India filing workflow', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/health')) return json(readyHealth);
+      if (url.endsWith('/workspaces')) return json({ items: [workspace] });
+      if (url.includes('/dashboard?')) return json(emptyDashboard);
+      if (url.includes('/financials/gst-india/registrations?')) return json([]);
+      if (url.includes('/financials/gst-india/filings?')) return json({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AppShell />);
+    expect(await screen.findByRole('heading', { name: 'Portfolio overview' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: 'GST India' }));
+
+    expect(await screen.findByRole('heading', { name: 'GST India' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Step 1 — Add GST registration' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Credentials, OTP, EVC and DSC are never stored.')).toBeInTheDocument();
   });
 
   it('creates the first workspace and enters the dashboard', async () => {
